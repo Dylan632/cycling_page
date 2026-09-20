@@ -5,6 +5,7 @@ import * as polyline from '@mapbox/polyline';
 import type { Activity } from '../types';
 import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
+import { transformCartoRequest } from '@/components/RunMap/mapRequest';
 import './RouteMap.css';
 
 export interface RouteMapProps {
@@ -143,6 +144,7 @@ export function RouteMapCanvas({
       accessToken: MAPBOX_TOKEN,
       language: zh ? 'zh-Hans' : 'en',
       style: { version: 8, sources: {}, layers: [] },
+      transformRequest: (url) => transformCartoRequest(url),
       center: [121.4, 31.2],
       zoom: 10,
       ...cameraRef.current,
