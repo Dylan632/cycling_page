@@ -173,7 +173,10 @@ const check = async (args) => {
       'Mapbox is in the dashboard-critical static import closure'
     );
   }
-  if (!(manifest[dashboardRouteKey]?.dynamicImports ?? []).includes(mapKey)) {
+  const mapIsDynamic = [...dashboardStaticEntries].some((entryKey) =>
+    (manifest[entryKey]?.dynamicImports ?? []).includes(mapKey)
+  );
+  if (!mapIsDynamic) {
     throw new Error(
       'RouteMapCanvas must remain a dynamic import of the shared dashboard'
     );

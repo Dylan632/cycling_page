@@ -505,7 +505,10 @@ test('resource budget CLI checks route-critical chunks and initial activity data
     'src/dashboard/index.tsx': {
       file: 'assets/dashboard.js',
       isDynamicEntry: true,
-      imports: ['index.html'],
+      imports: ['index.html', 'src/dashboard/components/RouteMap.tsx'],
+    },
+    'src/dashboard/components/RouteMap.tsx': {
+      file: 'assets/route-map.js',
       dynamicImports: ['src/dashboard/components/RouteMapCanvas.tsx'],
     },
     'src/dashboard/components/RouteMapCanvas.tsx': {
@@ -529,6 +532,7 @@ test('resource budget CLI checks route-critical chunks and initial activity data
       writeFile(join(assetsDir, 'entry.css'), 'css'),
       writeFile(join(assetsDir, 'shared.js'), 'shared'),
       writeFile(join(assetsDir, 'dashboard.js'), 'dashboard'),
+      writeFile(join(assetsDir, 'route-map.js'), 'route map loader'),
       writeFile(join(assetsDir, 'mapbox.js'), randomBytes(400_000)),
       ...['running', 'cycling', 'hiking'].flatMap((mode) => [
         writeFile(
