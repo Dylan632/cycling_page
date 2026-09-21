@@ -347,7 +347,7 @@ export const validateBrowserProbe = ({
   if (state.hasFatalUi) {
     throw new Error(`${mode} browser rendered the fatal error boundary`);
   }
-  if (state.mapRenderer !== 'mapbox') {
+  if (state.mapRenderer !== 'maplibre') {
     throw new Error(`${mode} browser did not render the interactive map`);
   }
 
@@ -655,7 +655,7 @@ const runBrowserProbe = async ({
       if (
         state?.markerMode === mode &&
         state?.currentModePath === `/${mode}` &&
-        state?.mapRenderer === 'mapbox'
+        state?.mapRenderer === 'maplibre'
       ) {
         break;
       }

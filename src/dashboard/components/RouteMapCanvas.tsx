@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import * as polyline from '@mapbox/polyline';
 import type { Activity } from '../types';
-import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
 import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
 import { transformCartoRequest } from '@/components/RunMap/mapRequest';
 import {
   CARTO_RASTER_TILE_HOSTS,
-  isMissingMapboxTokenError,
   isRecoverableCartoMapError,
 } from '../utils/mapRuntime';
 import './RouteMap.css';
@@ -32,7 +30,7 @@ const routeCache = new WeakMap<
 
 const createCartoRasterStyle = (
   dark?: boolean
-): mapboxgl.StyleSpecification => {
+): maplibregl.StyleSpecification => {
   const theme = dark === false ? 'light_all' : 'dark_all';
   // Carto serves the raster basemaps from the plain shard hosts; the
   // `tiles-*` hosts only answer for vector tiles and 404 on every PNG.
@@ -72,21 +70,17 @@ export function RouteMapCanvas({
   const zh = locale === 'zh';
   const panelRef = useRef<HTMLElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
   const styleReadyRef = useRef(false);
-  const cameraRef = useRef<mapboxgl.CameraOptions | null>(null);
+  const cameraRef = useRef<maplibregl.CameraOptions | null>(null);
   const fittedRef = useRef<unknown>(null);
-  const [provider, setProvider] = useState(MAPBOX_TOKEN ? 'mapbox' : 'carto');
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     'loading'
   );
   const [retry, setRetry] = useState(0);
-  const style = useMemo<mapboxgl.StyleSpecification | string>(
-    () =>
-      provider === 'mapbox'
-        ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
-        : createCartoRasterStyle(dark),
-    [dark, provider]
+  const style = useMemo<maplibregl.StyleSpecification>(
+    () => createCartoRasterStyle(dark),
+    [dark]
   );
 
   const routes = useMemo(() => {
@@ -123,7 +117,7 @@ export function RouteMapCanvas({
   }, [activities, selectedActivity]);
 
   const routeBounds = useMemo(() => {
-    const bounds = new mapboxgl.LngLatBounds();
+    const bounds = new maplibregl.LngLatBounds();
     for (const route of routes) {
       for (const coord of route.geometry.coordinates)
         bounds.extend(coord as [number, number]);
@@ -145,10 +139,13 @@ export function RouteMapCanvas({
 
   const drawRoutes = useCallback(() => {
     const map = mapRef.current;
-    if (!map || !styleReadyRef.current) return;
+    // isStyleLoaded() is the same check addSource makes internally. Trusting
+    // the ref alone let a stale `true` reach a freshly built map and throw
+    // "Style is not done loading", which took the whole page down.
+    if (!map || !styleReadyRef.current || !map.isStyleLoaded()) return;
     const data = { type: 'FeatureCollection' as const, features: routes };
     const source = map.getSource('routes') as
-      | mapboxgl.GeoJSONSource
+      | maplibregl.GeoJSONSource
       | undefined;
     if (source) source.setData(data);
     else {
@@ -187,18 +184,16 @@ export function RouteMapCanvas({
 
   useEffect(() => {
     if (!containerRef.current || !panelRef.current) return;
-    const map = new mapboxgl.Map({
+    const map = new maplibregl.Map({
       container: containerRef.current,
-      accessToken: MAPBOX_TOKEN || undefined,
-      language: zh ? 'zh-Hans' : 'en',
       style: { version: 8, sources: {}, layers: [] },
-      transformRequest: (url) => transformCartoRequest(url),
+      transformRequest: (url: string) => transformCartoRequest(url),
       center: [121.4, 31.2],
       zoom: 10,
       ...cameraRef.current,
       locale: zh
         ? {
-            'Map.Title': `${profile.label}路线地图`,
+            'Map.Title': '路线地图',
             'NavigationControl.ZoomIn': '放大',
             'NavigationControl.ZoomOut': '缩小',
             'NavigationControl.ResetBearing': '恢复朝北',
@@ -209,13 +204,17 @@ export function RouteMapCanvas({
         : {},
     });
     mapRef.current = map;
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    // A new map starts with the placeholder style and no layers, so every
+    // piece of per-map state has to start over with it.
+    styleReadyRef.current = false;
+    fittedRef.current = null;
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.addControl(
-      new mapboxgl.FullscreenControl({ container: panelRef.current }),
+      new maplibregl.FullscreenControl({ container: panelRef.current }),
       'top-right'
     );
     map.addControl(
-      new mapboxgl.ScaleControl({ unit: 'metric', maxWidth: 90 }),
+      new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 90 }),
       'bottom-left'
     );
     const observer = new ResizeObserver(() => map.resize());
@@ -231,13 +230,24 @@ export function RouteMapCanvas({
       map.remove();
       mapRef.current = null;
     };
-  }, [zh, profile.label]);
+  }, [zh]);
+
+  // Naming the map after the active mode is a label change, not a reason to
+  // tear down the WebGL context and reload every tile on each mode switch.
+  useEffect(() => {
+    const container = mapRef.current?.getContainer();
+    if (!container) return;
+    container.setAttribute(
+      'aria-label',
+      zh ? `${profile.label}路线地图` : `${profile.label} route map`
+    );
+  }, [profile.label, zh]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     let failed = false;
-    const onError = (event: mapboxgl.ErrorEvent) => {
+    const onError = (event: maplibregl.ErrorEvent) => {
       const error = event.error as Error & {
         name?: string;
         status?: number;
@@ -246,28 +256,16 @@ export function RouteMapCanvas({
       const code = error.status;
       const message = error.message ?? '';
       const isMissingCartoGlyph =
-        provider === 'carto' &&
         (code === 404 || /\b404\b/.test(message)) &&
         /(?:\/|%2F)fonts(?:\/|%2F)/i.test(message) &&
         /\.pbf\b/i.test(message);
       const isRecoverableCartoError =
-        provider === 'carto' &&
-        (isRecoverableCartoMapError(error) ||
-          (styleReadyRef.current && (code === 404 || /\b404\b/.test(message))));
+        isRecoverableCartoMapError(error) ||
+        (styleReadyRef.current && (code === 404 || /\b404\b/.test(message)));
 
       if (isMissingCartoGlyph || isRecoverableCartoError) return;
-      // mapbox-gl raises this from its own telemetry even when the style is a
-      // plain Carto raster source, so it must never fail the Carto basemap.
-      if (isMissingMapboxTokenError(error)) {
-        if (provider === 'mapbox') setProvider('carto');
-        return;
-      }
-      if (provider === 'mapbox' && (code === 401 || code === 403)) {
-        setProvider('carto');
-      } else {
-        failed = true;
-        setStatus('error');
-      }
+      failed = true;
+      setStatus('error');
     };
     const onIdle = () => {
       if (!failed) setStatus('ready');
@@ -279,7 +277,6 @@ export function RouteMapCanvas({
     styleReadyRef.current = false;
     map.setStyle(style, {
       diff: false,
-      localFontFamily: undefined,
       localIdeographFontFamily: 'sans-serif',
     });
     const timer = window.setTimeout(() => {
@@ -291,7 +288,7 @@ export function RouteMapCanvas({
       map.off('idle', onIdle);
       map.off('styledataloading', onLoading);
     };
-  }, [style, provider, retry, zh]);
+  }, [style, retry, zh]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -368,7 +365,7 @@ export function RouteMapCanvas({
         <div
           ref={containerRef}
           className="h-full w-full"
-          data-map-renderer="mapbox"
+          data-map-renderer="maplibre"
         />
         {!routes.length && (
           <div className="route-map-empty" role="status">
@@ -390,29 +387,16 @@ export function RouteMapCanvas({
               ? zh
                 ? '正在加载地图…'
                 : 'Loading map…'
-              : provider === 'carto'
-                ? zh
-                  ? '备用底图 · CARTO'
-                  : 'Alternative basemap · CARTO'
-                : zh
-                  ? '底图 · Mapbox'
-                  : 'Basemap · Mapbox'}
+              : zh
+                ? '底图 · CARTO'
+                : 'Basemap · CARTO'}
         </span>
-        {(status === 'error' || (provider === 'carto' && !!MAPBOX_TOKEN)) && (
+        {status === 'error' && (
           <button
             className="route-map-action"
-            onClick={() => {
-              setProvider(MAPBOX_TOKEN ? 'mapbox' : 'carto');
-              setRetry((value) => value + 1);
-            }}
+            onClick={() => setRetry((value) => value + 1)}
           >
-            {provider === 'carto' && MAPBOX_TOKEN
-              ? zh
-                ? '重试 Mapbox'
-                : 'Retry Mapbox'
-              : zh
-                ? '重试'
-                : 'Retry'}
+            {zh ? '重试' : 'Retry'}
           </button>
         )}
       </div>

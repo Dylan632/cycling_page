@@ -34,6 +34,68 @@ const TRANSPARENT_MAP_TILE = Buffer.from(
   'base64'
 );
 
+// A visibly patterned, fully opaque tile. The default transparent fixture
+// cannot tell a painted basemap apart from a canvas that drew nothing.
+const OPAQUE_MAP_TILE = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAEAUlEQVR42u3TQQ3AIBREQWT0' +
+    'iIweK6XSkIoIwl52EgRM2P/GM9+r7/vX1cfPf/KGAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiA' +
+    'XwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgF' +
+    'YAB+ARiAXwAG4BeAAfgFYAB+ATggfgE4IH4BOCB+ATggfgE4IP5QAD6Iv9kvAH4BGIBfAAbg' +
+    'F4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4B' +
+    'GIBfAAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBfAA6IXwAOiF8ADohfAA6IXwAOiD8V' +
+    'gA/ib/YLgF8ABuAXgAH4BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8A' +
+    'BuAXgAH4BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8ABuAXgAPiF4AD' +
+    '4heAA+IXgAPiF4AD4k8F4IP4m/0C4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeA' +
+    'AfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiA' +
+    'XwAG4BeAAfgF4ID4BeCA+AXggPgF4ID4BeCA+FMB+CD+Zr8A+AVgAH4BGIBfAAbgF4AB+AVg' +
+    'AH4BGIBfAAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBfAAbg' +
+    'F4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BOCB+ATggfgE4IH4BOCB+ATgg/lQAPoi/2S8AfgEY' +
+    'gF8ABuAXgAH4BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8ABuAXgAH4' +
+    'BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8ABuAXgAH4BWAAfgEYgF8ADohfAA6IXwAOiF8ADohf' +
+    'AA6IPxWAD+Jv9guAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+' +
+    'ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeAAfgFYAB+ARiAXwAG4BeA' +
+    'A+IXgAPiF4AD4heAA+IXgAPiTwXgg/ib/QLgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBf' +
+    'AAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVgAH4BGIBfAAbgF4AB+AVg' +
+    'AH4BGIBfAAbgF4AB+AXggPgF4ID4BeCA+AXggPgF4ID4Q/4NbpoMqQxzOjYAAAAASUVORK5C' +
+    'YII=',
+  'base64'
+);
+
+const countMapCanvasColours = async (page) => {
+  const canvas = page
+    .locator('#map-container canvas.maplibregl-canvas')
+    .first();
+  await canvas.waitFor({ state: 'visible' });
+  const screenshot = await canvas.screenshot({
+    type: 'png',
+    animations: 'disabled',
+  });
+  return page.evaluate(async (data) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${data}`;
+    await image.decode();
+    const surface = document.createElement('canvas');
+    surface.width = image.width;
+    surface.height = image.height;
+    const context = surface.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Could not create a sampling canvas');
+    context.drawImage(image, 0, 0);
+    const { data: pixels } = context.getImageData(
+      0,
+      0,
+      surface.width,
+      surface.height
+    );
+    const seen = new Set();
+    for (let index = 0; index < pixels.length; index += 4) {
+      seen.add(
+        `${pixels[index] >> 3},${pixels[index + 1] >> 3},${pixels[index + 2] >> 3}`
+      );
+    }
+    return seen.size;
+  }, screenshot.toString('base64'));
+};
+
 let browser;
 let origin;
 let vite;
@@ -790,6 +852,111 @@ test(
 );
 
 test(
+  'the route map paints a real basemap instead of an empty canvas',
+  { timeout: 90_000 },
+  async () => {
+    const session = await createBrowserPage(1280);
+    try {
+      // Registered after the shared fixtures, so it wins: an opaque tile makes
+      // "painted" and "painted nothing" distinguishable.
+      for (const shard of ['a', 'b', 'c', 'd']) {
+        await session.context.route(
+          `https://${shard}.basemaps.cartocdn.com/**`,
+          (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: 'image/png',
+              body: OPAQUE_MAP_TILE,
+            })
+        );
+      }
+
+      await openActivityPage(session.page, 'running');
+      await session.page
+        .locator('#map-container canvas.maplibregl-canvas')
+        .waitFor({ state: 'visible' });
+      await session.page.waitForFunction(
+        () =>
+          !/正在加载地图|Loading map/.test(
+            document.querySelector('.route-map-footer')?.textContent ?? ''
+          ),
+        undefined,
+        { timeout: 30_000 }
+      );
+      await waitForAnimationFrames(session.page);
+
+      // mapbox-gl v3 refused to render at all without an access token: the
+      // style loaded, the camera moved, the controls worked and the canvas
+      // stayed empty. Every DOM-level gate passed straight through that.
+      const colours = await countMapCanvasColours(session.page);
+      assert.ok(
+        colours >= 4,
+        `the map canvas only painted ${colours} distinct colours, so the basemap never reached the screen`
+      );
+
+      session.assertNoRuntimeErrors();
+    } finally {
+      await session.context.close();
+    }
+  }
+);
+
+test(
+  'switching activity modes keeps the map alive instead of crashing the page',
+  { timeout: 90_000 },
+  async () => {
+    const session = await createBrowserPage(1280);
+    try {
+      await openActivityPage(session.page, 'running');
+
+      const mapStatus = session.page.locator('.route-map-footer');
+      await mapStatus.waitFor({ state: 'visible' });
+
+      const modeSwitcher = session.page.getByRole('navigation', {
+        name: '运动类型切换',
+      });
+
+      for (const [label, path] of [
+        ['骑行', '/cycling'],
+        ['徒步', '/hiking'],
+        ['跑步', '/running'],
+      ]) {
+        await modeSwitcher.getByRole('link', { name: label }).click();
+        await session.page.waitForURL((url) => url.pathname === path);
+        await session.page
+          .locator('.dashboard .activity-log-card')
+          .waitFor({ state: 'visible' });
+
+        // The map is rebuilt or re-fitted on every switch. A stale style ref
+        // used to make addSource throw "Style is not done loading", which the
+        // app error boundary turned into a full-page failure.
+        assert.equal(
+          await session.page.getByText('运动记录暂时无法加载').count(),
+          0,
+          `switching to ${label} rendered the fatal error boundary`
+        );
+        assert.equal(
+          await session.page
+            .locator('#map-container canvas.maplibregl-canvas')
+            .count(),
+          1,
+          `switching to ${label} lost the map canvas`
+        );
+        assert.doesNotMatch(
+          (await mapStatus.textContent()) ?? '',
+          /加载失败|failed to load/i,
+          `switching to ${label} left the basemap in a failed state`
+        );
+      }
+
+      session.assertNoRuntimeErrors();
+    } finally {
+      await session.context.close();
+    }
+  }
+);
+
+test(
   'route data remains visible when WebGL is unavailable',
   {
     timeout: 60_000,
@@ -822,7 +989,7 @@ test(
       );
       assert.equal(
         await session.page
-          .locator('#map-container canvas.mapboxgl-canvas')
+          .locator('#map-container canvas.maplibregl-canvas')
           .count(),
         0,
         'the page attempted to mount Mapbox after WebGL preflight failed'
