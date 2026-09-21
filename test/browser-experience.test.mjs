@@ -747,15 +747,18 @@ test(
         .locator('.dashboard .activity-log-card')
         .waitFor({ state: 'visible' });
 
+      const modeSwitcher = session.page.getByRole('navigation', {
+        name: '运动类型切换',
+      });
       assert.equal(
-        await session.page.locator('a[href$="/cycling"]').count(),
+        await modeSwitcher.getByRole('link', { name: '骑行' }).count(),
         1,
-        'Cycling link is missing from the running dashboard header'
+        'Cycling switch is missing from the dashboard header'
       );
       assert.equal(
-        await session.page.locator('a[href$="/hiking"]').count(),
+        await modeSwitcher.getByRole('link', { name: '徒步' }).count(),
         1,
-        'Hiking link is missing from the running dashboard header'
+        'Hiking switch is missing from the dashboard header'
       );
       session.assertNoRuntimeErrors();
     } finally {
