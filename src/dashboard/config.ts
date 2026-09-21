@@ -23,5 +23,5 @@ export const GOALS: Record<string, GoalConfig> = {
 };
 
 export const AVATAR =
-  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQTtc69JxHNmN1ETpMUX4dozAgAN6iPjWalQ&usqp=CAU';
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQTtc69JxHNcmN1ETpMUX4dozAgAN6iPjWalQ&usqp=CAU';
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
