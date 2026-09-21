@@ -134,8 +134,8 @@ const createBrowserPage = async (width, { forceNoWebGL = false } = {}) => {
     });
   }
 
-  // The map layout itself is under test, while the third-party tile service is
-  // deliberately replaced with a valid empty style to keep CI deterministic.
+  // The map layout itself is under test, while third-party map resources are
+  // replaced with deterministic fixtures so CI never depends on Carto uptime.
   await context.route('https://basemaps.cartocdn.com/**', (route) =>
     route.fulfill({
       status: 200,
@@ -144,14 +144,12 @@ const createBrowserPage = async (width, { forceNoWebGL = false } = {}) => {
     })
   );
   for (const shard of ['tiles-a', 'tiles-b', 'tiles-c', 'tiles-d']) {
-    await context.route(
-      `https://${shard}.basemaps.cartocdn.com/**`,
-      (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: 'image/png',
-          body: TRANSPARENT_MAP_TILE,
-        })
+    await context.route(`https://${shard}.basemaps.cartocdn.com/**`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: TRANSPARENT_MAP_TILE,
+      })
     );
   }
   await context.route('https://events.mapbox.com/**', (route) =>
