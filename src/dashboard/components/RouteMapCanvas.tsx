@@ -24,6 +24,39 @@ const routeCache = new WeakMap<
   }[]
 >();
 
+const createCartoRasterStyle = (
+  dark?: boolean
+): mapboxgl.StyleSpecification => {
+  const theme = dark === false ? 'light_all' : 'dark_all';
+  const tileHosts = [
+    'tiles-a.basemaps.cartocdn.com',
+    'tiles-b.basemaps.cartocdn.com',
+    'tiles-c.basemaps.cartocdn.com',
+    'tiles-d.basemaps.cartocdn.com',
+  ];
+
+  return {
+    version: 8,
+    sources: {
+      'carto-raster': {
+        type: 'raster',
+        tiles: tileHosts.map(
+          (host) => `https://${host}/${theme}/{z}/{x}/{y}.png`
+        ),
+        tileSize: 256,
+        attribution: '© OpenStreetMap contributors © CARTO',
+      },
+    },
+    layers: [
+      {
+        id: 'carto-raster',
+        type: 'raster',
+        source: 'carto-raster',
+      },
+    ],
+  };
+};
+
 export function RouteMapCanvas({
   activities,
   selectedActivity,
@@ -43,10 +76,13 @@ export function RouteMapCanvas({
     'loading'
   );
   const [retry, setRetry] = useState(0);
-  const style =
-    provider === 'mapbox'
-      ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
-      : `https://basemaps.cartocdn.com/gl/${dark === false ? 'positron' : 'dark-matter'}-gl-style/style.json`;
+  const style = useMemo<mapboxgl.StyleSpecification | string>(
+    () =>
+      provider === 'mapbox'
+        ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
+        : createCartoRasterStyle(dark),
+    [dark, provider]
+  );
 
   const routes = useMemo(() => {
     const items = selectedActivity ? [selectedActivity] : activities;

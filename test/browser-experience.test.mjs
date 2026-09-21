@@ -29,6 +29,10 @@ const EMPTY_MAP_STYLE = JSON.stringify({
   sources: {},
   layers: [],
 });
+const TRANSPARENT_MAP_TILE = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);
 
 let browser;
 let origin;
@@ -139,6 +143,17 @@ const createBrowserPage = async (width, { forceNoWebGL = false } = {}) => {
       body: EMPTY_MAP_STYLE,
     })
   );
+  for (const shard of ['tiles-a', 'tiles-b', 'tiles-c', 'tiles-d']) {
+    await context.route(
+      `https://${shard}.basemaps.cartocdn.com/**`,
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'image/png',
+          body: TRANSPARENT_MAP_TILE,
+        })
+    );
+  }
   await context.route('https://events.mapbox.com/**', (route) =>
     route.fulfill({ status: 204, body: '' })
   );
