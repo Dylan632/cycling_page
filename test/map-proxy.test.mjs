@@ -9,6 +9,13 @@ const CARTO_TILE_HOSTNAMES = [
   'tiles-d.basemaps.cartocdn.com',
 ];
 
+const CARTO_RASTER_HOSTNAMES = [
+  'a.basemaps.cartocdn.com',
+  'b.basemaps.cartocdn.com',
+  'c.basemaps.cartocdn.com',
+  'd.basemaps.cartocdn.com',
+];
+
 const createResponse = () => ({
   headers: new Map(),
   statusCode: undefined,
@@ -55,4 +62,39 @@ test('proxies all Carto vector-tile shard hostnames', async () => {
     )
   );
   assert.ok(requestedUrls.every(({ method }) => method === 'GET'));
+});
+
+test('proxies the Carto raster basemap shard hostnames', async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls = [];
+  globalThis.fetch = async (url, options) => {
+    requestedUrls.push({ url: String(url), method: options.method });
+    return new globalThis.Response('png bytes', {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    });
+  };
+
+  try {
+    for (const hostname of CARTO_RASTER_HOSTNAMES) {
+      const response = createResponse();
+      const tileUrl = `https://${hostname}/dark_all/10/857/418.png`;
+      await mapProxy(
+        { method: 'GET', query: { url: tileUrl }, headers: {} },
+        response
+      );
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.headers.get('content-type'), 'image/png');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(
+    requestedUrls.map(({ url }) => url),
+    CARTO_RASTER_HOSTNAMES.map(
+      (hostname) => `https://${hostname}/dark_all/10/857/418.png`
+    )
+  );
 });

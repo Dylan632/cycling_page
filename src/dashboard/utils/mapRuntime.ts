@@ -5,6 +5,33 @@ export interface MapRuntimeErrorLike {
   url?: string;
 }
 
+/**
+ * Carto publishes the raster basemaps (`dark_all`, `light_all`) on these shard
+ * hosts. The similarly named `tiles-*.basemaps.cartocdn.com` hosts only answer
+ * for vector tiles, so asking them for a PNG returns 404 for every tile and
+ * leaves the map blank.
+ */
+export const CARTO_RASTER_TILE_HOSTS = [
+  'a.basemaps.cartocdn.com',
+  'b.basemaps.cartocdn.com',
+  'c.basemaps.cartocdn.com',
+  'd.basemaps.cartocdn.com',
+] as const;
+
+const CARTO_RASTER_HOST_PATTERN =
+  /(?:\b[a-d]\.basemaps\.cartocdn\.com|tiles-[a-d]\.basemaps\.cartocdn\.com|\/api\/map-proxy)/i;
+
+/**
+ * mapbox-gl reports a missing access token from its own session telemetry even
+ * when the map only renders third-party tiles, so this error says nothing about
+ * whether the Carto basemap loaded.
+ */
+export const isMissingMapboxTokenError = (
+  error: MapRuntimeErrorLike
+): boolean =>
+  /access token/i.test(error.message ?? '') &&
+  /mapbox/i.test(error.message ?? '');
+
 export const isRecoverableCartoMapError = (
   error: MapRuntimeErrorLike
 ): boolean => {
@@ -17,9 +44,8 @@ export const isRecoverableCartoMapError = (
   }
 
   const isRasterTileRequest =
-    /(?:tiles-[a-d]\.basemaps\.cartocdn\.com|\/api\/map-proxy)/i.test(
-      details
-    ) && /(?:dark_all|light_all|\.png(?:\b|[?#]))/i.test(details);
+    CARTO_RASTER_HOST_PATTERN.test(details) &&
+    /(?:dark_all|light_all|\.png(?:\b|[?#]))/i.test(details);
 
   if (!isRasterTileRequest) return false;
 
