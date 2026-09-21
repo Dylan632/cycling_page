@@ -37,7 +37,7 @@ export function RouteMap(props: RouteMapProps) {
     </div>
   );
   return (
-    <div ref={containerRef}>
+    <div id="map-container" ref={containerRef}>
       <Suspense fallback={placeholder}>
         {visible || props.selectedActivity ? (
           <MapCanvas {...props} />
