@@ -1,0 +1,22 @@
+name: Deploy verified master to Vercel Production
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - master
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    uses: ./.github/workflows/vercel-production.yml
+    with:
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit
