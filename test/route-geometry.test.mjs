@@ -567,3 +567,33 @@ test('proxies Carto resources through the deployed site origin', async () => {
     null
   );
 });
+
+
+test('track-wall Carto tile cancellations do not mark the whole basemap as failed', async () => {
+  const { isRecoverableCartoMapError } = await vite.ssrLoadModule(
+    '/src/dashboard/utils/mapRuntime.ts'
+  );
+
+  assert.equal(
+    isRecoverableCartoMapError({
+      name: 'AbortError',
+      message: 'The operation was aborted.',
+    }),
+    true
+  );
+  assert.equal(
+    isRecoverableCartoMapError({
+      status: 404,
+      message:
+        'Failed to load https://records.example/api/map-proxy?url=https%3A%2F%2Ftiles-a.basemaps.cartocdn.com%2Fdark_all%2F11%2F1712%2F836.png',
+    }),
+    true
+  );
+  assert.equal(
+    isRecoverableCartoMapError({
+      status: 500,
+      message: 'WebGL context creation failed',
+    }),
+    false
+  );
+});

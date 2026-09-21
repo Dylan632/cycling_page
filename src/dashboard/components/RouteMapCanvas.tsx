@@ -6,6 +6,7 @@ import type { Activity } from '../types';
 import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
 import { transformCartoRequest } from '@/components/RunMap/mapRequest';
+import { isRecoverableCartoMapError } from '../utils/mapRuntime';
 import './RouteMap.css';
 
 export interface RouteMapProps {
@@ -227,7 +228,11 @@ export function RouteMapCanvas({
     if (!map) return;
     let failed = false;
     const onError = (event: mapboxgl.ErrorEvent) => {
-      const error = event.error as Error & { status?: number };
+      const error = event.error as Error & {
+        name?: string;
+        status?: number;
+        url?: string;
+      };
       const code = error.status;
       const message = error.message ?? '';
       const isMissingCartoGlyph =
@@ -235,8 +240,13 @@ export function RouteMapCanvas({
         (code === 404 || /\b404\b/.test(message)) &&
         /(?:\/|%2F)fonts(?:\/|%2F)/i.test(message) &&
         /\.pbf\b/i.test(message);
+      const isRecoverableCartoError =
+        provider === 'carto' &&
+        (isRecoverableCartoMapError(error) ||
+          (styleReadyRef.current &&
+            (code === 404 || /\b404\b/.test(message))));
 
-      if (isMissingCartoGlyph) return;
+      if (isMissingCartoGlyph || isRecoverableCartoError) return;
       if (provider === 'mapbox' && (code === 401 || code === 403)) {
         setProvider('carto');
       } else {
@@ -258,7 +268,7 @@ export function RouteMapCanvas({
       localIdeographFontFamily: 'sans-serif',
     });
     const timer = window.setTimeout(() => {
-      if (!map.isStyleLoaded()) setStatus('error');
+      if (!styleReadyRef.current) setStatus('error');
     }, 15000);
     return () => {
       window.clearTimeout(timer);
