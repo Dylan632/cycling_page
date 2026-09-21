@@ -7,7 +7,11 @@ import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
 import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
 import { transformCartoRequest } from '@/components/RunMap/mapRequest';
-import { isRecoverableCartoMapError } from '../utils/mapRuntime';
+import {
+  CARTO_RASTER_TILE_HOSTS,
+  isMissingMapboxTokenError,
+  isRecoverableCartoMapError,
+} from '../utils/mapRuntime';
 import './RouteMap.css';
 
 export interface RouteMapProps {
@@ -30,12 +34,9 @@ const createCartoRasterStyle = (
   dark?: boolean
 ): mapboxgl.StyleSpecification => {
   const theme = dark === false ? 'light_all' : 'dark_all';
-  const tileHosts = [
-    'tiles-a.basemaps.cartocdn.com',
-    'tiles-b.basemaps.cartocdn.com',
-    'tiles-c.basemaps.cartocdn.com',
-    'tiles-d.basemaps.cartocdn.com',
-  ];
+  // Carto serves the raster basemaps from the plain shard hosts; the
+  // `tiles-*` hosts only answer for vector tiles and 404 on every PNG.
+  const tileHosts = CARTO_RASTER_TILE_HOSTS;
 
   return {
     version: 8,
@@ -46,6 +47,7 @@ const createCartoRasterStyle = (
           (host) => `https://${host}/${theme}/{z}/{x}/{y}.png`
         ),
         tileSize: 256,
+        maxzoom: 20,
         attribution: '© OpenStreetMap contributors © CARTO',
       },
     },
@@ -187,7 +189,7 @@ export function RouteMapCanvas({
     if (!containerRef.current || !panelRef.current) return;
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      accessToken: MAPBOX_TOKEN,
+      accessToken: MAPBOX_TOKEN || undefined,
       language: zh ? 'zh-Hans' : 'en',
       style: { version: 8, sources: {}, layers: [] },
       transformRequest: (url) => transformCartoRequest(url),
@@ -254,6 +256,12 @@ export function RouteMapCanvas({
           (styleReadyRef.current && (code === 404 || /\b404\b/.test(message))));
 
       if (isMissingCartoGlyph || isRecoverableCartoError) return;
+      // mapbox-gl raises this from its own telemetry even when the style is a
+      // plain Carto raster source, so it must never fail the Carto basemap.
+      if (isMissingMapboxTokenError(error)) {
+        if (provider === 'mapbox') setProvider('carto');
+        return;
+      }
       if (provider === 'mapbox' && (code === 401 || code === 403)) {
         setProvider('carto');
       } else {

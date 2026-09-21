@@ -143,7 +143,16 @@ const createBrowserPage = async (width, { forceNoWebGL = false } = {}) => {
       body: EMPTY_MAP_STYLE,
     })
   );
-  for (const shard of ['tiles-a', 'tiles-b', 'tiles-c', 'tiles-d']) {
+  for (const shard of [
+    'tiles-a',
+    'tiles-b',
+    'tiles-c',
+    'tiles-d',
+    'a',
+    'b',
+    'c',
+    'd',
+  ]) {
     await context.route(`https://${shard}.basemaps.cartocdn.com/**`, (route) =>
       route.fulfill({
         status: 200,

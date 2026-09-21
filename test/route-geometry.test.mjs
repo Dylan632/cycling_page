@@ -559,6 +559,14 @@ test('proxies Carto resources through the deployed site origin', async () => {
       `https://records.example/api/map-proxy?url=${encodeURIComponent(tileUrl)}`
     );
   }
+  for (const shard of ['a', 'b', 'c', 'd']) {
+    const tileUrl = `https://${shard}.basemaps.cartocdn.com/dark_all/10/857/418.png`;
+    assert.equal(
+      getCartoProxyUrl(tileUrl, 'https://records.example'),
+      `https://records.example/api/map-proxy?url=${encodeURIComponent(tileUrl)}`,
+      'the raster basemap shards must be proxied through the site origin'
+    );
+  }
   assert.equal(
     getCartoProxyUrl(
       'https://example.com/style.json',
@@ -590,8 +598,65 @@ test('track-wall Carto tile cancellations do not mark the whole basemap as faile
   );
   assert.equal(
     isRecoverableCartoMapError({
+      status: 404,
+      message:
+        'Failed to load https://records.example/api/map-proxy?url=https%3A%2F%2Fa.basemaps.cartocdn.com%2Fdark_all%2F11%2F1712%2F836.png',
+    }),
+    true
+  );
+  assert.equal(
+    isRecoverableCartoMapError({
       status: 500,
       message: 'WebGL context creation failed',
+    }),
+    false
+  );
+});
+
+test('the dashboard basemap requests Carto raster tiles from the raster shards', async () => {
+  const { CARTO_RASTER_TILE_HOSTS } = await vite.ssrLoadModule(
+    '/src/dashboard/utils/mapRuntime.ts'
+  );
+
+  assert.deepEqual(
+    [...CARTO_RASTER_TILE_HOSTS],
+    [
+      'a.basemaps.cartocdn.com',
+      'b.basemaps.cartocdn.com',
+      'c.basemaps.cartocdn.com',
+      'd.basemaps.cartocdn.com',
+    ],
+    'the tiles-* hosts only serve vector tiles and 404 on every raster PNG'
+  );
+
+  const source = await readFile(
+    new URL('../src/dashboard/components/RouteMapCanvas.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.ok(
+    !/tiles-[a-d]\.basemaps\.cartocdn\.com/.test(source),
+    'the raster basemap must not be pinned to the vector-tile hosts'
+  );
+});
+
+test('a missing Mapbox token never fails the token-free Carto basemap', async () => {
+  const { isMissingMapboxTokenError } = await vite.ssrLoadModule(
+    '/src/dashboard/utils/mapRuntime.ts'
+  );
+
+  assert.equal(
+    isMissingMapboxTokenError({
+      name: 'Error',
+      message:
+        'A valid Mapbox access token is required to use Mapbox GL JS. To create an account or a new access token, visit https://account.mapbox.com/',
+    }),
+    true
+  );
+  assert.equal(
+    isMissingMapboxTokenError({
+      status: 404,
+      message:
+        'Failed to load https://a.basemaps.cartocdn.com/dark_all/1/1/1.png',
     }),
     false
   );
