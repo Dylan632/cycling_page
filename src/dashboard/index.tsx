@@ -127,6 +127,13 @@ function Dashboard() {
       data-app-ready="running"
       data-filter={filter}
     >
+      <a
+        aria-current="page"
+        className="sr-only"
+        href={`${import.meta.env.BASE_URL}running`}
+      >
+        Running
+      </a>
       <Header
         dark={dark}
         toggleTheme={toggle}
