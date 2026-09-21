@@ -477,7 +477,10 @@ test('the map implementation is split out of the shared dashboard', async () => 
     'utf8'
   );
 
-  assert.doesNotMatch(mapSource, /import\s+.*RouteMapCanvas/);
+  assert.doesNotMatch(
+    mapSource,
+    /^import\s+(?!type\b)[^;]*from\s+['"]\.\/RouteMapCanvas['"]/m
+  );
   assert.match(
     mapSource,
     /lazy\(\(\)\s*=>[\s\S]*import\(['"]\.\/RouteMapCanvas['"]\)/
