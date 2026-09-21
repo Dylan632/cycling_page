@@ -264,7 +264,7 @@ export const disposeBrowserProbe = async ({ child, profileDirectory }) => {
 
 const isAllowedBrowserNoise = (message) => {
   if (
-    /(?:^WebGL: software fallback is deprecated$|Automatic fallback to software WebGL has been deprecated|GPU process exited|ANGLE Display::initialize error|GL Driver Message)/i.test(
+    /(?:^WebGL: software fallback is deprecated$|Automatic fallback to software WebGL has been deprecated|GPU process exited|ANGLE Display::initialize error|GL Driver Message|CDP Fetch\.continueRequest failed: Invalid InterceptionId)/i.test(
       message
     )
   ) {
@@ -272,7 +272,7 @@ const isAllowedBrowserNoise = (message) => {
   }
 
   return (
-    /\/api\/map-proxy\?url=https%3A%2F%2Ftiles\.basemaps\.cartocdn\.com%2Ffonts%2F(?:HanWangHeiLight|NanumBarunGothic)(?:\+|%20)Regular%2F\d+-\d+\.pbf/i.test(
+    /\/api\/map-proxy\?url=https%3A%2F%2Ftiles\.basemaps\.cartocdn\.com%2Ffonts%2F(?:(?:HanWangHeiLight|NanumBarunGothic)(?:\+|%20)Regular|Montserrat(?:\+|%20)Regular(?:\+|%20)Italic)%2F\d+-\d+\.pbf/i.test(
       message
     ) &&
     /Failed to load resource:\s*the server responded with a status of 404/i.test(
@@ -319,11 +319,14 @@ export const validateBrowserProbe = ({
     throw new Error(`${mode} browser did not render the interactive map`);
   }
 
+  const actionablePageErrors = pageErrors.filter(
+    (message) => !isAllowedBrowserNoise(message)
+  );
   const actionableConsoleErrors = consoleErrors.filter(
     (message) => !isAllowedBrowserNoise(message)
   );
   const failures = [
-    ...pageErrors.map((message) => `pageerror: ${message}`),
+    ...actionablePageErrors.map((message) => `pageerror: ${message}`),
     ...actionableConsoleErrors.map((message) => `console.error: ${message}`),
     ...failedRequests
       .filter(

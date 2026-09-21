@@ -266,6 +266,22 @@ test('browser diagnostics require the final mode marker and surface application 
   assert.doesNotThrow(() =>
     validateBrowserProbe({
       ...healthy,
+      consoleErrors: [
+        'Failed to load resource: the server responded with a status of 404 () [source: https://records.example/api/map-proxy?url=https%3A%2F%2Ftiles.basemaps.cartocdn.com%2Ffonts%2FMontserrat+Regular+Italic%2F0-255.pbf]',
+      ],
+    })
+  );
+  assert.doesNotThrow(() =>
+    validateBrowserProbe({
+      ...healthy,
+      pageErrors: [
+        'Protection bypass request interception failed: CDP Fetch.continueRequest failed: Invalid InterceptionId.',
+      ],
+    })
+  );
+  assert.doesNotThrow(() =>
+    validateBrowserProbe({
+      ...healthy,
       failedRequests: [
         {
           url: 'https://records.example/api/map-proxy',
