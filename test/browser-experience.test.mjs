@@ -692,8 +692,8 @@ test(
             documentWidth: document.documentElement.scrollWidth,
             viewportWidth: window.innerWidth,
             headerVisible:
-              document.querySelector('header')?.getBoundingClientRect().height ??
-              0,
+              document.querySelector('header')?.getBoundingClientRect()
+                .height ?? 0,
             cardCount: document.querySelectorAll(
               '.dashboard [class*="rounded-xl"][class*="border"]'
             ).length,
@@ -702,8 +702,14 @@ test(
             layout.documentWidth <= layout.viewportWidth + 1,
             `Running dashboard overflows by ${layout.documentWidth - layout.viewportWidth}px`
           );
-          assert.ok(layout.headerVisible > 0, 'Running dashboard header is missing');
-          assert.ok(layout.cardCount >= 4, 'Running dashboard cards did not render');
+          assert.ok(
+            layout.headerVisible > 0,
+            'Running dashboard header is missing'
+          );
+          assert.ok(
+            layout.cardCount >= 4,
+            'Running dashboard cards did not render'
+          );
 
           const severeViolations = await runAxeAudit(session.page);
           const unexpectedViolations =
@@ -746,11 +752,17 @@ test(
       await openActivityPage(session.page, 'running');
 
       await session.page.getByRole('button', { name: '轨迹墙' }).click();
-      await session.page.waitForURL((url) => url.pathname === '/running/tracks');
-      await session.page.getByRole('heading', { name: /轨迹墙|Tracks/ }).waitFor();
+      await session.page.waitForURL(
+        (url) => url.pathname === '/running/tracks'
+      );
+      await session.page
+        .getByRole('heading', { name: /轨迹墙|Tracks/ })
+        .waitFor();
 
       await session.page.getByRole('button', { name: 'Summary' }).click();
-      await session.page.waitForURL((url) => url.pathname === '/running/summary');
+      await session.page.waitForURL(
+        (url) => url.pathname === '/running/summary'
+      );
       await session.page.getByRole('heading', { name: 'Summary' }).waitFor();
 
       await session.page.getByRole('button', { name: '首页' }).click();
