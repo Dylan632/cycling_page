@@ -628,7 +628,7 @@ const runBrowserProbe = async ({
       );
       state = evaluated.result?.value;
       if (
-        state?.markerMode === expectedMode &&
+        state?.markerMode === mode &&
         state?.currentModePath === `/${mode}` &&
         state?.mapRenderer === 'mapbox'
       ) {
