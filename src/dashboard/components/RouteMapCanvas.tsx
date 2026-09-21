@@ -107,7 +107,8 @@ export function RouteMapCanvas({
     if (!map || !styleReadyRef.current) return;
     const data = { type: 'FeatureCollection' as const, features: routes };
     const source = map.getSource('routes') as
-      mapboxgl.GeoJSONSource | undefined;
+      | mapboxgl.GeoJSONSource
+      | undefined;
     if (source) source.setData(data);
     else {
       map.addSource('routes', { type: 'geojson', data });
