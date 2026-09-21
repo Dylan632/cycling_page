@@ -243,8 +243,7 @@ export function RouteMapCanvas({
       const isRecoverableCartoError =
         provider === 'carto' &&
         (isRecoverableCartoMapError(error) ||
-          (styleReadyRef.current &&
-            (code === 404 || /\b404\b/.test(message))));
+          (styleReadyRef.current && (code === 404 || /\b404\b/.test(message))));
 
       if (isMissingCartoGlyph || isRecoverableCartoError) return;
       if (provider === 'mapbox' && (code === 401 || code === 403)) {

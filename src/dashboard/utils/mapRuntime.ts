@@ -19,8 +19,7 @@ export const isRecoverableCartoMapError = (
   const isRasterTileRequest =
     /(?:tiles-[a-d]\.basemaps\.cartocdn\.com|\/api\/map-proxy)/i.test(
       details
-    ) &&
-    /(?:dark_all|light_all|\.png(?:\b|[?#]))/i.test(details);
+    ) && /(?:dark_all|light_all|\.png(?:\b|[?#]))/i.test(details);
 
   if (!isRasterTileRequest) return false;
 

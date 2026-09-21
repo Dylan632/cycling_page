@@ -568,7 +568,6 @@ test('proxies Carto resources through the deployed site origin', async () => {
   );
 });
 
-
 test('track-wall Carto tile cancellations do not mark the whole basemap as failed', async () => {
   const { isRecoverableCartoMapError } = await vite.ssrLoadModule(
     '/src/dashboard/utils/mapRuntime.ts'
