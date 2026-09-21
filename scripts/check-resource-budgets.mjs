@@ -163,10 +163,15 @@ const check = async (args) => {
   );
   const dashboardRouteKey = 'src/dashboard/index.tsx';
   const mapKey = 'src/dashboard/components/RouteMapCanvas.tsx';
-  const dashboardStaticEntries = collectStaticFiles(manifest, dashboardRouteKey);
+  const dashboardStaticEntries = collectStaticFiles(
+    manifest,
+    dashboardRouteKey
+  );
 
   if (dashboardStaticEntries.has(mapKey)) {
-    throw new Error('Mapbox is in the dashboard-critical static import closure');
+    throw new Error(
+      'Mapbox is in the dashboard-critical static import closure'
+    );
   }
   if (!(manifest[dashboardRouteKey]?.dynamicImports ?? []).includes(mapKey)) {
     throw new Error(
