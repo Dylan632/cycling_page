@@ -284,11 +284,7 @@ const isAllowedBrowserNoise = (message) => {
   );
 };
 
-const isAllowedFailedRequest = ({
-  url,
-  errorText,
-  responseStatus,
-}) => {
+const isAllowedFailedRequest = ({ url, errorText, responseStatus }) => {
   if (
     errorText === 'net::ERR_ABORTED' &&
     responseStatus >= 200 &&
@@ -306,9 +302,7 @@ const isAllowedFailedRequest = ({
     const target = new URL(targetValue);
     return (
       /^tiles-[a-d]\.basemaps\.cartocdn\.com$/i.test(target.hostname) &&
-      /^\/(?:dark_all|light_all)\/\d+\/\d+\/\d+\.png$/i.test(
-        target.pathname
-      )
+      /^\/(?:dark_all|light_all)\/\d+\/\d+\/\d+\.png$/i.test(target.pathname)
     );
   } catch {
     return false;
