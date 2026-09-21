@@ -10,9 +10,7 @@ import {
 } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import AppErrorBoundary from '@/components/AppErrorBoundary';
-import {
-  ActivityModeProvider,
-} from '@/modules/activity/ActivityModeProvider';
+import { ActivityModeProvider } from '@/modules/activity/ActivityModeProvider';
 import { isActivityMode } from '@/modules/activity/profiles';
 import {
   initializeGoogleAnalytics,
