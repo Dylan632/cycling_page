@@ -596,3 +596,39 @@ test('track-wall Carto tile cancellations do not mark the whole basemap as faile
     false
   );
 });
+
+
+test('dashboard performance units and track legends follow the activity mode', async () => {
+  const {
+    formatActivityPerformance,
+    getActivityPresentation,
+    getDistanceFilterOptions,
+    getTrackColor,
+  } = await vite.ssrLoadModule('/src/dashboard/utils/activityPresentation.ts');
+
+  assert.deepEqual(
+    formatActivityPerformance(5, 'cycling', 'zh'),
+    {
+      label: '速度',
+      averageLabel: '均速',
+      bestLabel: '最高均速',
+      value: '18.0',
+      unit: 'km/h',
+      display: '18.0 km/h',
+    }
+  );
+  assert.equal(
+    formatActivityPerformance(10 / 3, 'running', 'zh').display,
+    '5:00 /km'
+  );
+  assert.equal(
+    formatActivityPerformance(1.5, 'hiking', 'zh').display,
+    '5.4 km/h'
+  );
+  assert.deepEqual(getDistanceFilterOptions('cycling'), [20, 50, 100]);
+  assert.deepEqual(getDistanceFilterOptions('hiking'), [5, 10, 20]);
+  assert.equal(getActivityPresentation('cycling').longDistanceKm, 50);
+  assert.equal(getActivityPresentation('hiking').longDistanceKm, 10);
+  assert.equal(getTrackColor('cycling', 60_000), '#8b5cf6');
+  assert.equal(getTrackColor('hiking', 12_000), '#15803d');
+});

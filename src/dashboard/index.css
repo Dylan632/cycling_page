@@ -32,6 +32,16 @@
   --color-on-accent: #171717;
 }
 
+[data-activity-mode='cycling'][data-filter='all'] {
+  --color-accent: #3b82f6;
+  --color-on-accent: #ffffff;
+}
+
+[data-activity-mode='hiking'][data-filter='all'] {
+  --color-accent: #22c55e;
+  --color-on-accent: #07120a;
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text);

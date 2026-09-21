@@ -7,6 +7,11 @@ import {
   extractProvince,
 } from '../hooks/useActivities';
 import { AVATAR } from '../config';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import {
+  getActivityPresentation,
+  getActivityTypeLabel,
+} from '../utils/activityPresentation';
 
 interface ProfileCardProps {
   activities: Activity[];
@@ -18,6 +23,8 @@ export const ProfileCard = memo(function ProfileCard({
   filter = 'all',
 }: ProfileCardProps) {
   const { t, locale } = useLocale();
+  const { mode } = useActivityMode();
+  const presentation = getActivityPresentation(mode);
 
   // Filter activities by sport type for distance/count/time
   const filteredActivities =
@@ -227,8 +234,8 @@ export const ProfileCard = memo(function ProfileCard({
             {locale === 'zh' ? '最近活动' : 'Latest Activity'}
           </p>
           <p className="text-sm font-medium">
-            {latest.type === 'Run' ? '🏃 ' : '🚴 '}
-            {latest.name || (latest.type === 'Run' ? 'Run' : 'Ride')}
+            {presentation.icon}{' '}
+            {latest.name || getActivityTypeLabel(mode, latest.type, locale)}
             <span className="font-normal text-[var(--color-muted)]">
               {' '}
               · {formatDistance(latest.distance)} km ·{' '}

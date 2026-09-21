@@ -7,11 +7,14 @@ import {
   getAvailableYears,
   formatDistance,
   parseMovingTime,
-  formatPace,
 } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
-
-type SportType = 'Run';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import {
+  formatActivityPerformance,
+  getActivityPresentation,
+  getTrackColor,
+} from '../utils/activityPresentation';
 const trackPlaceholders = Array.from({ length: 40 }, (_, id) => ({
   id,
   delay: id * 20,
@@ -19,7 +22,6 @@ const trackPlaceholders = Array.from({ length: 40 }, (_, id) => ({
 
 interface TracksPageProps {
   activities: Activity[];
-  filter: string;
   dark?: boolean;
   onBack: () => void;
   onSelectActivity?: (a: Activity | null) => void;
@@ -100,13 +102,6 @@ const TrackThumb = memo(function TrackThumb({
   );
 });
 
-function getColor(a: Activity): string {
-  if (a.type === 'Run') {
-    const km = a.distance / 1000;
-    return km >= 20 ? '#ef4444' : '#f97316';
-  }
-  return '#4dd2ff';
-}
 
 export function TracksPage({
   activities,
@@ -115,9 +110,10 @@ export function TracksPage({
   onSelectActivity,
 }: TracksPageProps) {
   const { locale } = useLocale();
+  const { mode, profile } = useActivityMode();
+  const presentation = getActivityPresentation(mode);
   const allYears = useMemo(() => getAvailableYears(activities), [activities]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [sportFilter, setSportFilter] = useState<SportType | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
     null
   );
@@ -139,22 +135,15 @@ export function TracksPage({
     yearPage * MAX_YEARS + MAX_YEARS
   );
 
-  // Determine which sport types exist
-  const hasSport = (t: SportType) => activities.some((a) => a.type === t);
-
-  // Filtered base (year + sport)
+  // Each page already contains a single activity mode, so only filter by year.
   const base = useMemo(
     () =>
-      activities.filter((a) => {
-        if (
-          selectedYear !== null &&
-          new Date(a.start_date_local).getFullYear() !== selectedYear
-        )
-          return false;
-        if (sportFilter !== null && a.type !== sportFilter) return false;
-        return true;
-      }),
-    [activities, selectedYear, sportFilter]
+      activities.filter(
+        (a) =>
+          selectedYear === null ||
+          new Date(a.start_date_local).getFullYear() === selectedYear
+      ),
+    [activities, selectedYear]
   );
 
   const withPolyline = useMemo(
@@ -163,21 +152,24 @@ export function TracksPage({
     [base]
   );
 
-  const { totalDist, totalTime, avgPace } = useMemo(() => {
-    let totalDist = 0,
-      totalTime = 0,
-      speed = 0,
-      runs = 0;
+  const { totalDist, totalTime, averageSpeed } = useMemo(() => {
+    let totalDist = 0;
+    let totalTime = 0;
     for (const activity of base) {
       totalDist += activity.distance;
       totalTime += parseMovingTime(activity.moving_time);
-      if (activity.type === 'Run' && activity.average_speed > 0) {
-        speed += activity.average_speed;
-        runs++;
-      }
     }
-    return { totalDist, totalTime, avgPace: runs ? speed / runs : 0 };
+    return {
+      totalDist,
+      totalTime,
+      averageSpeed: totalTime > 0 ? totalDist / totalTime : 0,
+    };
   }, [base]);
+  const aggregatePerformance = formatActivityPerformance(
+    averageSpeed,
+    mode,
+    locale
+  );
 
   // Cluster tracks — defer heavy work
   type Cluster = { representative: Activity; count: number; color: string };
@@ -197,7 +189,7 @@ export function TracksPage({
         data.map(({ index, count }) => ({
           representative: withPolyline[index],
           count,
-          color: getColor(withPolyline[index]),
+          color: getTrackColor(mode, withPolyline[index].distance),
         }))
       );
       setClusteredInput(withPolyline);
@@ -208,7 +200,7 @@ export function TracksPage({
         withPolyline.map((representative) => ({
           representative,
           count: 1,
-          color: getColor(representative),
+          color: getTrackColor(mode, representative.distance),
         }))
       );
       setClusteredInput(withPolyline);
@@ -221,7 +213,7 @@ export function TracksPage({
       }))
     );
     return () => worker.terminate();
-  }, [withPolyline]);
+  }, [withPolyline, mode]);
 
   const sortedTracks = useMemo(
     () =>
@@ -258,10 +250,6 @@ export function TracksPage({
     ? parseMovingTime(selectedActivity.moving_time)
     : 0;
   const selectedDurationLabel = `${Math.floor(selectedSeconds / 3600) ? Math.floor(selectedSeconds / 3600) + 'h ' : ''}${Math.floor((selectedSeconds % 3600) / 60)}m`;
-
-  const allSportTabs: { label: string; value: SportType; color: string }[] = [
-    { label: locale === 'zh' ? '跑步' : 'Run', value: 'Run', color: '#f97316' },
-  ];
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6 sm:py-6">
@@ -331,13 +319,13 @@ export function TracksPage({
                   {Math.floor((totalTime % 3600) / 60)}m
                 </p>
               </div>
-              {avgPace > 0 && (
+              {averageSpeed > 0 && (
                 <div>
                   <p className="text-[10px] tracking-wider text-[var(--color-muted)] uppercase">
-                    {locale === 'zh' ? '均配速' : 'Avg Pace'}
+                    {aggregatePerformance.averageLabel}
                   </p>
                   <p className="font-mono text-lg font-bold">
-                    {formatPace(avgPace)}
+                    {aggregatePerformance.display}
                   </p>
                 </div>
               )}
@@ -412,13 +400,22 @@ export function TracksPage({
                 {selectedActivity.average_speed > 0 && (
                   <div>
                     <p className="text-[9px] tracking-wider text-[var(--color-muted)] uppercase">
-                      {locale === 'zh' ? '配速' : 'Pace'}
+                      {
+                        formatActivityPerformance(
+                          selectedActivity.average_speed,
+                          mode,
+                          locale
+                        ).label
+                      }
                     </p>
                     <p className="font-mono text-base leading-tight font-bold">
-                      {formatPace(selectedActivity.average_speed)}{' '}
-                      <span className="text-[10px] font-normal text-[var(--color-muted)]">
-                        /km
-                      </span>
+                      {
+                        formatActivityPerformance(
+                          selectedActivity.average_speed,
+                          mode,
+                          locale
+                        ).display
+                      }
                     </p>
                   </div>
                 )}
@@ -524,42 +521,11 @@ export function TracksPage({
                   ›
                 </button>
               )}
-              {/* Sport filter — right side */}
+              {/* Current activity mode + export */}
               <div className="ml-auto flex items-center gap-1.5">
-                <button
-                  aria-pressed={sportFilter === null}
-                  onClick={() => {
-                    setExportUrl('');
-                    setExportMessage('');
-                    setSportFilter(null);
-                    setSelectedActivity(null);
-                    onSelectActivity?.(null);
-                  }}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${sportFilter === null ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent)]' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
-                >
-                  {locale === 'zh' ? '全部' : 'All'}
-                </button>
-                {allSportTabs
-                  .filter((t) => hasSport(t.value))
-                  .map(({ label, value, color }) => (
-                    <button
-                      key={value}
-                      aria-pressed={sportFilter === value}
-                      onClick={() => {
-                        setExportUrl('');
-                        setExportMessage('');
-                        setSportFilter(value);
-                        setSelectedActivity(null);
-                        onSelectActivity?.(null);
-                      }}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${sportFilter === value ? 'border-transparent text-white' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
-                      style={
-                        sportFilter === value ? { backgroundColor: color } : {}
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
+                <span className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs font-medium text-[var(--color-muted)]">
+                  {presentation.icon} {profile.label}
+                </span>
                 <span className="mx-1 h-3 w-px bg-[var(--color-border)]" />
                 <button
                   onClick={async () => {
@@ -680,20 +646,20 @@ export function TracksPage({
             {/* Legend + sort */}
             {!clustering && clusteredTracks.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-muted)]">
-                {sportFilter === null || sportFilter === 'Run' ? (
-                  <>
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-block h-0.5 w-3 rounded bg-[#f97316]" />
-                      {locale === 'zh' ? '跑步' : 'Run'}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-block h-0.5 w-3 rounded bg-[#ef4444]" />
-                      {locale === 'zh' ? '跑步 ≥20km' : 'Run ≥20km'}
-                    </span>
-                  </>
-                ) : null}
-                {null}
-                {null}
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-0.5 w-3 rounded"
+                    style={{ backgroundColor: presentation.primaryColor }}
+                  />
+                  {profile.label}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-0.5 w-3 rounded"
+                    style={{ backgroundColor: presentation.highlightColor }}
+                  />
+                  {profile.label} ≥{presentation.longDistanceKm}km
+                </span>
                 <div className="ml-auto flex items-center gap-1">
                   <span>
                     {clusteredTracks.length}{' '}

@@ -34,18 +34,7 @@ const ActivityTracks = () => <ActivityDashboard />;
 const createRouteElement = (element: React.ReactElement) =>
   withOptionalGAPageTracking(
     <AppErrorBoundary>
-      <Suspense
-        fallback={
-          <div
-            className="flex min-h-[50vh] items-center justify-center"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            正在加载运动记录…
-          </div>
-        }
-      >
+      <Suspense fallback={null}>
         {element}
       </Suspense>
     </AppErrorBoundary>

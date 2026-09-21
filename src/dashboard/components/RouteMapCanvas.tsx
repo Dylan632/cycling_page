@@ -5,6 +5,7 @@ import * as polyline from '@mapbox/polyline';
 import type { Activity } from '../types';
 import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
 import { transformCartoRequest } from '@/components/RunMap/mapRequest';
 import { isRecoverableCartoMapError } from '../utils/mapRuntime';
 import './RouteMap.css';
@@ -65,6 +66,7 @@ export function RouteMapCanvas({
   onClearSelection,
 }: RouteMapProps) {
   const { locale } = useLocale();
+  const { profile } = useActivityMode();
   const zh = locale === 'zh';
   const panelRef = useRef<HTMLElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -162,6 +164,12 @@ export function RouteMapCanvas({
             '#f97316',
             'Ride',
             '#3b82f6',
+            'VirtualRide',
+            '#3b82f6',
+            'Biking',
+            '#3b82f6',
+            'Hiking',
+            '#22c55e',
             '#4dd2ff',
           ],
         },
@@ -188,7 +196,7 @@ export function RouteMapCanvas({
       ...cameraRef.current,
       locale: zh
         ? {
-            'Map.Title': '跑步路线地图',
+            'Map.Title': `${profile.label}路线地图`,
             'NavigationControl.ZoomIn': '放大',
             'NavigationControl.ZoomOut': '缩小',
             'NavigationControl.ResetBearing': '恢复朝北',
@@ -221,7 +229,7 @@ export function RouteMapCanvas({
       map.remove();
       mapRef.current = null;
     };
-  }, [zh]);
+  }, [zh, profile.label]);
 
   useEffect(() => {
     const map = mapRef.current;

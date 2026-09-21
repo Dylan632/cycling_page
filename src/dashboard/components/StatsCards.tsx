@@ -3,6 +3,8 @@ import type { Activity, SportFilter } from '../types';
 import { formatDistance, parseMovingTime } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
 import { GOALS, DEFAULT_GOAL } from '../config';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import { getActivityPresentation } from '../utils/activityPresentation';
 
 interface StatsCardsProps {
   activities: Activity[];
@@ -20,6 +22,8 @@ export const StatsCards = memo(function StatsCards({
   onSelectActivity,
 }: StatsCardsProps) {
   const { t, locale } = useLocale();
+  const { mode } = useActivityMode();
+  const presentation = getActivityPresentation(mode);
   const goal = GOALS[filter] ?? DEFAULT_GOAL;
   // For Gym, goals are in minutes; for others, goals are in km → convert to meters
   const yearGoalMeters = goal.unit === 'time' ? 0 : goal.yearly * 1000;
@@ -301,10 +305,7 @@ export const StatsCards = memo(function StatsCards({
 
   function dayColor(acts: Activity[]): string {
     if (acts.length === 0) return '';
-    const sorted = [...acts].sort((a, b) => b.distance - a.distance);
-    const type = sorted[0].type;
-    if (type === 'Run') return '#f97316';
-    return 'var(--color-text)';
+    return presentation.primaryColor;
   }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {

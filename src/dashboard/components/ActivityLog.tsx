@@ -1,7 +1,14 @@
 import { useState, useMemo } from 'react';
 import type { Activity, SportFilter } from '../types';
-import { formatDuration, formatPace } from '../hooks/useActivities';
+import { formatDuration } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import {
+  formatActivityPerformance,
+  getActivityPresentation,
+  getActivityTypeLabel,
+  getDistanceFilterOptions,
+} from '../utils/activityPresentation';
 
 interface ActivityLogProps {
   activities: Activity[];
@@ -15,14 +22,7 @@ interface ActivityLogProps {
 
 const PAGE_SIZE = 16;
 
-type DistanceFilter = 'all' | '10' | '20' | '40';
-
-function typeIcon(type: string): string {
-  const icons: Record<string, string> = {
-    Run: '🏃',
-  };
-  return icons[type] ?? '📌';
-}
+type DistanceFilter = 'all' | `${number}`;
 
 export function ActivityLog({
   activities,
@@ -33,22 +33,18 @@ export function ActivityLog({
   onSelectActivity,
 }: ActivityLogProps) {
   const { t, locale } = useLocale();
+  const { mode } = useActivityMode();
+  const presentation = getActivityPresentation(mode);
+  const performance = formatActivityPerformance(0, mode, locale);
+  const distanceOptions = getDistanceFilterOptions(mode);
   const [page, setPage] = useState(0);
   const [distFilter, setDistFilter] = useState<DistanceFilter>('all');
 
   const sorted = useMemo(() => {
     const filtered = activities.filter((a) => {
       const km = a.distance / 1000;
-      switch (distFilter) {
-        case '10':
-          return km >= 10;
-        case '20':
-          return km >= 20;
-        case '40':
-          return km >= 40;
-        default:
-          return true;
-      }
+      if (distFilter === 'all') return true;
+      return km >= Number(distFilter);
     });
     return filtered.sort(
       (a, b) =>
@@ -135,9 +131,13 @@ export function ActivityLog({
         {(
           [
             ['all', t('all')],
-            ['10', '10km+'],
-            ['20', '20km+'],
-            ['40', '40km+'],
+            ...distanceOptions.map(
+              (distance) =>
+                [String(distance), `${distance}km+`] as [
+                  DistanceFilter,
+                  string,
+                ]
+            ),
           ] as [DistanceFilter, string][]
         ).map(([val, label]) => (
           <button
@@ -158,7 +158,7 @@ export function ActivityLog({
       <p className="table-scroll-hint mb-2 text-xs text-[var(--color-muted)]">
         {locale === 'zh'
           ? '左右滑动查看更多数据，点击记录查看路线'
-          : 'Swipe for more details; select a run to view its route'}
+          : 'Swipe for more details; select an activity to view its route'}
       </p>
       {/* Table */}
       <div className="overflow-x-auto">
@@ -170,7 +170,7 @@ export function ActivityLog({
               <th className="pb-3 font-medium">{t('name')}</th>
               <th className="pb-3 font-medium">{t('distance')}</th>
               <th className="pb-3 font-medium">{t('duration')}</th>
-              <th className="pb-3 font-medium">{t('pace')}</th>
+              <th className="pb-3 font-medium">{performance.label}</th>
               <th className="pb-3 font-medium">{t('hr')}</th>
             </tr>
           </thead>
@@ -216,10 +216,12 @@ export function ActivityLog({
                 </td>
                 <td className="py-3">
                   <span className="text-[var(--color-muted)]">
-                    {typeIcon(a.type)} {a.type}
+                    {presentation.icon} {getActivityTypeLabel(mode, a.type, locale)}
                   </span>
                 </td>
-                <td className="py-3">{a.name || t('run')}</td>
+                <td className="py-3">
+                  {a.name || getActivityTypeLabel(mode, a.type, locale)}
+                </td>
                 <td className="py-3 font-mono font-medium">
                   {(a.distance / 1000).toFixed(1)}
                   <span className="ml-1 text-xs font-normal text-[var(--color-muted)]">
@@ -230,7 +232,7 @@ export function ActivityLog({
                   {formatDuration(a.moving_time)}
                 </td>
                 <td className="py-3 text-[var(--color-muted)]">
-                  {formatPace(a.average_speed)}
+                  {formatActivityPerformance(a.average_speed, mode, locale).display}
                 </td>
                 <td className="py-3 text-[var(--color-muted)]">
                   {a.average_heartrate ? Math.round(a.average_heartrate) : '--'}

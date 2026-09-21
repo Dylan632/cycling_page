@@ -5,9 +5,10 @@ import {
   getAvailableYears,
   formatDistance,
   parseMovingTime,
-  formatPace,
 } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import { formatActivityPerformance } from '../utils/activityPresentation';
 
 const MAX_VISIBLE_YEARS = 10;
 const weekdayIds = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -21,9 +22,15 @@ interface HeatmapProps {
 
 // Map any activity type to the 4 display categories
 function toDisplayType(type: string): 'Run' | 'Ride' | 'Hike' | 'Training' {
-  if (type === 'Run') return 'Run';
-  if (type === 'Ride') return 'Ride';
-  if (type === 'Hike') return 'Hike';
+  if (type === 'Run' || type === 'running') return 'Run';
+  if (
+    type === 'Ride' ||
+    type === 'VirtualRide' ||
+    type === 'cycling' ||
+    type === 'Biking'
+  )
+    return 'Ride';
+  if (type === 'Hike' || type === 'Hiking') return 'Hike';
   return 'Training';
 }
 
@@ -95,12 +102,10 @@ function buildYearGrid(
     (s, a) => s + parseMovingTime(a.moving_time),
     0
   );
-  const runs = yearActivities.filter((a) => a.type === 'Run');
-  // Average pace as distance-weighted mean speed (totalDistance / totalTime),
-  // not an arithmetic mean of per-run speeds. M5 fix.
-  const runDistance = runs.reduce((s, a) => s + a.distance, 0);
-  const runTime = runs.reduce((s, a) => s + parseMovingTime(a.moving_time), 0);
-  const avgPace = runTime > 0 && runDistance > 0 ? runDistance / runTime : 0;
+  // Distance-weighted mean speed, used as pace for running and km/h for
+  // cycling/hiking.
+  const averageSpeed =
+    totalTime > 0 && totalDist > 0 ? totalDist / totalTime : 0;
 
   // Per-day totals
   const dayMap = new Map<string, number>();
@@ -194,7 +199,7 @@ function buildYearGrid(
       count: yearActivities.length,
       distance: totalDist,
       time: totalTime,
-      pace: avgPace,
+      pace: averageSpeed,
     },
   };
 }
@@ -206,6 +211,7 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
   onSelectActivity,
 }: HeatmapProps) {
   const { t, locale } = useLocale();
+  const { mode, profile } = useActivityMode();
   const allYears = useMemo(() => getAvailableYears(activities), [activities]);
   const [selectedYear, setSelectedYear] = useState<number | 'all'>(defaultYear);
   const [previousDefaultYear, setPreviousDefaultYear] = useState(defaultYear);
@@ -268,7 +274,9 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
         )
         .map((a) => toDisplayType(a.type))
     );
-    return (['Run', 'Training'] as const).filter((t) => types.has(t));
+    return (['Run', 'Ride', 'Hike', 'Training'] as const).filter((t) =>
+      types.has(t)
+    );
   }, [activities, selectedYear, isAll]);
 
   // Gym: monthly session breakdown
@@ -292,11 +300,7 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
   };
 
   const heatmapTitle =
-    filter === 'Run'
-      ? locale === 'zh'
-        ? '跑步热力图'
-        : 'Run Heatmap'
-      : t('heatmapTitle');
+    locale === 'zh' ? `${profile.label}热力图` : profile.copy.heatmapTitle;
 
   const handleSelectYear = (yr: number | 'all') => {
     setExportUrl('');
@@ -822,7 +826,7 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
                   {formatDistance(yearData[0].stats.distance)} km
                 </span>
               )}
-              {filter === 'Run' && yearData[0].stats.pace > 0 && (
+              {!isGym && yearData[0].stats.pace > 0 && (
                 <span className="flex items-center gap-1 font-mono">
                   <svg
                     className="h-3.5 w-3.5"
@@ -837,7 +841,13 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
                       d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
                     />
                   </svg>
-                  {formatPace(yearData[0].stats.pace)}
+                  {
+                    formatActivityPerformance(
+                      yearData[0].stats.pace,
+                      mode,
+                      locale
+                    ).display
+                  }
                 </span>
               )}
             </div>

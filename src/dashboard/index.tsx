@@ -128,6 +128,7 @@ function Dashboard() {
     <div
       className="dashboard min-h-screen bg-[var(--color-bg)]"
       data-app-ready={mode}
+      data-activity-mode={mode}
       data-filter={filter}
     >
       <a
@@ -145,16 +146,7 @@ function Dashboard() {
         onNavigate={navigate}
       />
 
-      <Suspense
-        fallback={
-          <main
-            className="mx-auto min-h-[60vh] max-w-[1400px] p-6"
-            role="status"
-          >
-            Loading…
-          </main>
-        }
-      >
+      <Suspense fallback={null}>
         {page === 'summary' ? (
           <SummaryPage
             activities={activities}
@@ -168,7 +160,6 @@ function Dashboard() {
           <TracksPage
             activities={activities}
             dark={dark}
-            filter={filter}
             onSelectActivity={selectActivity}
             onBack={() => {
               navigate('home');

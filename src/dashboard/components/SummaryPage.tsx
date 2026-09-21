@@ -10,7 +10,11 @@ import {
 } from 'recharts';
 import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
-import { formatPace } from '../hooks/useActivities';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import {
+  formatActivityPerformance,
+  getActivityTypeLabel,
+} from '../utils/activityPresentation';
 import {
   groupSummary,
   summaryKey,
@@ -39,8 +43,11 @@ function SummaryCard({
   zh: boolean;
   onSelectActivity: (a: Activity) => void;
 }) {
+  const { mode } = useActivityMode();
   const stats = summarize(activities);
   const chart = summaryChart(activities, period, label);
+  const averagePerformance = formatActivityPerformance(stats.speed, mode, zh ? 'zh' : 'en');
+  const bestPerformance = formatActivityPerformance(stats.maxSpeed, mode, zh ? 'zh' : 'en');
   const metrics = [
     [zh ? '活动次数' : 'Activities', String(stats.count)],
     [
@@ -48,8 +55,8 @@ function SummaryCard({
       `${Math.floor(stats.seconds / 3600)}h ${Math.floor((stats.seconds % 3600) / 60)}m`,
     ],
     [
-      zh ? '平均配速' : 'Average pace',
-      stats.speed > 0 ? `${formatPace(stats.speed)} /km` : '—',
+      averagePerformance.averageLabel,
+      stats.speed > 0 ? averagePerformance.display : '—',
     ],
     [
       zh ? '平均心率' : 'Average heart rate',
@@ -60,8 +67,8 @@ function SummaryCard({
       `${number(stats.maxDistance / 1000)} km`,
     ],
     [
-      zh ? '最快配速' : 'Fastest pace',
-      stats.maxSpeed > 0 ? `${formatPace(stats.maxSpeed)} /km` : '—',
+      bestPerformance.bestLabel,
+      stats.maxSpeed > 0 ? bestPerformance.display : '—',
     ],
     [
       zh ? '平均距离' : 'Average distance',
@@ -195,6 +202,7 @@ export function SummaryPage({
   onSelectActivity: (a: Activity) => void;
 }) {
   const { locale } = useLocale();
+  const { mode } = useActivityMode();
   const zh = locale === 'zh';
   const [period, setPeriod] = useState<SummaryPeriod>('month');
   const [sport, setSport] = useState('all');
@@ -256,7 +264,7 @@ export function SummaryPage({
               <option value="all">{zh ? '全部运动' : 'All sports'}</option>
               {sports.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {getActivityTypeLabel(mode, s, locale)}
                 </option>
               ))}
             </select>
