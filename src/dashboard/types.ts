@@ -7,8 +7,8 @@ export interface Activity {
   subtype?: string;
   start_date?: string;
   start_date_local: string;
-  location_country?: string | null;
-  summary_polyline?: string | null;
+  location_country: string | null;
+  summary_polyline: string | null;
   average_heartrate?: number | null;
   average_speed: number;
   elevation_gain: number | null;
