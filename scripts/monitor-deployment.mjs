@@ -429,7 +429,11 @@ const browserStateExpression = (mode) => `(() => {
   const markerMode = marker && marker.getAttribute('data-app-ready');
   const current = document.querySelector('a[aria-current="page"][href]');
   const root = document.querySelector('#root');
+  const mapContainer = document.querySelector('#map-container');
   const renderer = document.querySelector('#map-container [data-map-renderer]');
+  if (mode === 'running' && markerMode === mode && !renderer && mapContainer) {
+    mapContainer.scrollIntoView({ block: 'center' });
+  }
   return {
     href: window.location.href,
     rootHasContent: Boolean(root && root.textContent && root.textContent.trim()),
@@ -617,7 +621,11 @@ const runBrowserProbe = async ({
         sessionId
       );
       state = evaluated.result?.value;
-      if (state?.markerMode === mode && state?.currentModePath === `/${mode}`) {
+      if (
+        state?.markerMode === mode &&
+        state?.currentModePath === `/${mode}` &&
+        state?.mapRenderer === 'mapbox'
+      ) {
         break;
       }
       await sleep(250);
