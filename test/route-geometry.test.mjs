@@ -670,3 +670,25 @@ test('dashboard performance units and track legends follow the activity mode', a
   assert.equal(getTrackColor('cycling', 60_000), '#8b5cf6');
   assert.equal(getTrackColor('hiking', 12_000), '#15803d');
 });
+
+
+test('MapLibre uses Vite worker bundling in production', async () => {
+  const source = await readFile(
+    new URL(
+      '../src/dashboard/components/RouteMapCanvas.tsx',
+      import.meta.url
+    ),
+    'utf8'
+  );
+
+  assert.match(
+    source,
+    /maplibre-gl-worker\.mjs\?worker&url/,
+    'MapLibre worker must be bundled through Vite instead of resolved beside the app chunk'
+  );
+  assert.match(
+    source,
+    /setWorkerUrl\(maplibreWorkerUrl\)/,
+    'MapLibre must be pointed at the emitted worker asset'
+  );
+});

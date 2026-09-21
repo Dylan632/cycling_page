@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as polyline from '@mapbox/polyline';
 import type { Activity } from '../types';
@@ -11,6 +12,8 @@ import {
   isRecoverableCartoMapError,
 } from '../utils/mapRuntime';
 import './RouteMap.css';
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 export interface RouteMapProps {
   activities: Activity[];
