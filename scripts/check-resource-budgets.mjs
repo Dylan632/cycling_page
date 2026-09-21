@@ -161,19 +161,23 @@ const check = async (args) => {
   const manifest = await readJson(
     resolveInside(distDirectory, '.vite/manifest.json')
   );
-  const homeRouteKey = 'src/pages/index.tsx';
-  const summaryRouteKey = 'src/pages/total.tsx';
-  const mapKey = 'src/components/RunMap/index.tsx';
-  const homeStaticEntries = collectStaticFiles(manifest, homeRouteKey);
+  const dashboardRouteKey = 'src/dashboard/index.tsx';
+  const mapKey = 'src/dashboard/components/RouteMapCanvas.tsx';
+  const dashboardStaticEntries = collectStaticFiles(
+    manifest,
+    dashboardRouteKey
+  );
 
-  if (homeStaticEntries.has(mapKey)) {
-    throw new Error('Mapbox is in the route-critical static import closure');
+  if (dashboardStaticEntries.has(mapKey)) {
+    throw new Error('Mapbox is in the dashboard-critical static import closure');
   }
-  if (!(manifest[homeRouteKey]?.dynamicImports ?? []).includes(mapKey)) {
-    throw new Error('RunMap must remain a dynamic import of the activity page');
+  if (!(manifest[dashboardRouteKey]?.dynamicImports ?? []).includes(mapKey)) {
+    throw new Error(
+      'RouteMapCanvas must remain a dynamic import of the shared dashboard'
+    );
   }
   process.stdout.write(
-    'Mapbox remains dynamic and outside the critical path\n'
+    'Mapbox remains dynamic and outside the shared dashboard critical path\n'
   );
 
   await Promise.all([
@@ -181,13 +185,7 @@ const check = async (args) => {
       budget: args.criticalBudget,
       distDirectory,
       manifest,
-      routeKey: homeRouteKey,
-    }),
-    checkCriticalRoute({
-      budget: args.criticalBudget,
-      distDirectory,
-      manifest,
-      routeKey: summaryRouteKey,
+      routeKey: dashboardRouteKey,
     }),
     ...activityModes.map((mode) =>
       checkActivityData({
