@@ -471,18 +471,18 @@ test('activity repository aborts a stalled request within its recovery budget', 
   assert.ok(performance.now() - startedAt < 500);
 });
 
-test('the map implementation is split out of the initial page module', async () => {
-  const pageSource = await readFile('src/pages/index.tsx', 'utf8');
+test('the map implementation is split out of the shared dashboard', async () => {
+  const mapSource = await readFile(
+    'src/dashboard/components/RouteMap.tsx',
+    'utf8'
+  );
 
-  assert.doesNotMatch(
-    pageSource,
-    /import\s+RunMap\s+from\s+['"]@\/components\/RunMap['"]/
-  );
+  assert.doesNotMatch(mapSource, /import\s+.*RouteMapCanvas/);
   assert.match(
-    pageSource,
-    /lazy\(\(\)\s*=>\s*import\(['"]@\/components\/RunMap['"]\)\)/
+    mapSource,
+    /lazy\(\(\)\s*=>[\s\S]*import\(['"]\.\/RouteMapCanvas['"]\)/
   );
-  assert.match(pageSource, /<Suspense[\s\S]*<RunMap/);
+  assert.match(mapSource, /<Suspense[\s\S]*<MapCanvas/);
 });
 
 test('resource budget CLI checks route-critical chunks and initial activity data', async () => {
@@ -499,18 +499,13 @@ test('resource budget CLI checks route-critical chunks and initial activity data
       css: ['assets/entry.css'],
     },
     '_shared.js': { file: 'assets/shared.js' },
-    'src/pages/index.tsx': {
-      file: 'assets/page.js',
+    'src/dashboard/index.tsx': {
+      file: 'assets/dashboard.js',
       isDynamicEntry: true,
       imports: ['index.html'],
-      dynamicImports: ['src/components/RunMap/index.tsx'],
+      dynamicImports: ['src/dashboard/components/RouteMapCanvas.tsx'],
     },
-    'src/pages/total.tsx': {
-      file: 'assets/summary.js',
-      isDynamicEntry: true,
-      imports: ['index.html'],
-    },
-    'src/components/RunMap/index.tsx': {
+    'src/dashboard/components/RouteMapCanvas.tsx': {
       file: 'assets/mapbox.js',
       isDynamicEntry: true,
     },
@@ -530,8 +525,7 @@ test('resource budget CLI checks route-critical chunks and initial activity data
       writeFile(join(assetsDir, 'entry.js'), 'entry'),
       writeFile(join(assetsDir, 'entry.css'), 'css'),
       writeFile(join(assetsDir, 'shared.js'), 'shared'),
-      writeFile(join(assetsDir, 'page.js'), 'page'),
-      writeFile(join(assetsDir, 'summary.js'), 'summary'),
+      writeFile(join(assetsDir, 'dashboard.js'), 'dashboard'),
       writeFile(join(assetsDir, 'mapbox.js'), randomBytes(400_000)),
       ...['running', 'cycling', 'hiking'].flatMap((mode) => [
         writeFile(
