@@ -371,9 +371,16 @@ test('browser probe cleanup waits for Chrome to exit before removing its profile
   const child = new EventEmitter();
   child.exitCode = null;
   child.signalCode = null;
+  const cdpInput = new EventEmitter();
+  const cdpOutput = new EventEmitter();
+  child.stdio = [null, null, null, cdpInput, cdpOutput];
   let exited = false;
   child.kill = (signal) => {
     setTimeout(() => {
+      const reset = Object.assign(new Error('read ECONNRESET'), {
+        code: 'ECONNRESET',
+      });
+      cdpOutput.emit('error', reset);
       child.signalCode = signal;
       exited = true;
       child.emit('exit', null, signal);

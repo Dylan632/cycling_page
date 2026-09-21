@@ -251,6 +251,9 @@ const sleep = (milliseconds) =>
 export const disposeBrowserProbe = async ({ child, profileDirectory }) => {
   if (child.exitCode === null && child.signalCode === null) {
     const exit = once(child, 'exit');
+    for (const stream of [child.stdio?.[3], child.stdio?.[4]]) {
+      stream?.on?.('error', () => {});
+    }
     child.kill('SIGKILL');
     await exit;
   }
