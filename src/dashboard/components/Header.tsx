@@ -1,5 +1,8 @@
+import { Link } from 'react-router-dom';
 import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import { ACTIVITY_MODES } from '@/modules/activity/profiles';
 
 type Page = 'home' | 'tracks' | 'summary';
 
@@ -13,6 +16,13 @@ interface HeaderProps {
 
 export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
   const { locale, setLocale, t } = useLocale();
+  const { mode, hrefForMode } = useActivityMode();
+
+  const englishModeLabel = {
+    running: 'Running',
+    cycling: 'Cycling',
+    hiking: 'Hiking',
+  } as const;
 
   const navItems: { label: string; page: Page }[] = [
     { label: t('home'), page: 'home' },
@@ -23,11 +33,33 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/70 backdrop-blur-md">
       <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
+        {/* Logo + activity switcher */}
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-xl font-bold text-[var(--color-text)]">
-            RUNNING<span className="text-[var(--color-run)]">.</span>PAGE
+            {mode.toUpperCase()}
+            <span className="text-[var(--color-run)]">.</span>PAGE
           </span>
+          <nav
+            aria-label={locale === 'zh' ? '运动类型切换' : 'Activity switcher'}
+            className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-1"
+          >
+            {ACTIVITY_MODES.map((activity) => (
+              <Link
+                key={activity.mode}
+                to={hrefForMode(activity.mode)}
+                aria-current={activity.mode === mode ? 'page' : undefined}
+                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  activity.mode === mode
+                    ? 'bg-[var(--color-accent)] font-medium text-white'
+                    : 'text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                {locale === 'zh'
+                  ? activity.label
+                  : englishModeLabel[activity.mode]}
+              </Link>
+            ))}
+          </nav>
         </div>
 
         {/* Right nav */}
@@ -47,18 +79,6 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
               {item.label}
             </button>
           ))}
-          <a
-            href={`${import.meta.env.BASE_URL}cycling`}
-            className="text-sm text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
-          >
-            Cycling
-          </a>
-          <a
-            href={`${import.meta.env.BASE_URL}hiking`}
-            className="text-sm text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
-          >
-            Hiking
-          </a>
           <button
             aria-label={
               locale === 'zh'

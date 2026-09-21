@@ -15,6 +15,8 @@ import {
   extractProvince,
 } from './hooks/useActivities';
 import { useActivitiesWithRoutes } from '@/hooks/useActivities';
+import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
+import type { ActivityMode } from '@/modules/activity/profiles';
 import { useTheme } from './hooks/useTheme';
 import { LocaleProvider } from './hooks/useLocale';
 import { Header } from './components/Header';
@@ -47,13 +49,14 @@ const pageFromPath = (): Page => {
   return 'home';
 };
 
-const pagePath = (page: Page) => {
+const pagePath = (page: Page, mode: ActivityMode) => {
   const appBase = import.meta.env.BASE_URL.replace(/\/$/, '');
-  return `${appBase}/running${page === 'home' ? '' : `/${page}`}`;
+  return `${appBase}/${mode}${page === 'home' ? '' : `/${page}`}`;
 };
 
 function Dashboard() {
   const routeSectionRef = useRef<HTMLDivElement>(null);
+  const { mode, profile } = useActivityMode();
   const { activities: sourceActivities } = useActivitiesWithRoutes('Total');
   const activities = sourceActivities as unknown as Activity[];
   const { dark, toggle } = useTheme();
@@ -71,7 +74,7 @@ function Dashboard() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
   const navigate = (next: Page) => {
-    window.history.pushState(null, '', pagePath(next));
+    window.history.pushState(null, '', pagePath(next, mode));
     setPage(next);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
@@ -124,15 +127,15 @@ function Dashboard() {
   return (
     <div
       className="dashboard min-h-screen bg-[var(--color-bg)]"
-      data-app-ready="running"
+      data-app-ready={mode}
       data-filter={filter}
     >
       <a
         aria-current="page"
         className="sr-only"
-        href={`${import.meta.env.BASE_URL}running`}
+        href={`${import.meta.env.BASE_URL}${mode}`}
       >
-        Running
+        {profile.label}
       </a>
       <Header
         dark={dark}
@@ -239,7 +242,7 @@ function Dashboard() {
       </Suspense>
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-sm text-[var(--color-muted)]">
-        &copy; {currentYear} Running Page 3.0
+        &copy; {currentYear} {profile.label} · Running Page 3.0
       </footer>
     </div>
   );

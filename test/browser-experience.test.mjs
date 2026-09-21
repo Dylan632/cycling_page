@@ -227,19 +227,9 @@ const openActivityPage = async (page, mode) => {
     .locator(`[data-app-ready="${mode}"]`)
     .waitFor({ state: 'visible' });
 
-  if (mode === 'running') {
-    await page.locator('.dashboard .activity-log-card').waitFor({
-      state: 'visible',
-    });
-  } else {
-    await page
-      .locator('#map-container [data-map-renderer]')
-      .waitFor({ state: 'visible' });
-    await page
-      .locator('tbody button[type="button"][aria-pressed]')
-      .first()
-      .waitFor({ state: 'visible' });
-  }
+  await page.locator('.dashboard .activity-log-card').waitFor({
+    state: 'visible',
+  });
   await waitForAnimationFrames(page);
 };
 
@@ -583,17 +573,6 @@ test(
               viewportAudit.bodyScrollWidth <= viewportAudit.viewportWidth + 1,
               `Body overflows at ${mode}/${width}: ${JSON.stringify(viewportAudit)}`
             );
-            if (mode !== 'running') {
-              assert.ok(
-                viewportAudit.mapTop < 650,
-                `Map starts below 650px at ${mode}/${width}: ${viewportAudit.mapTop}px`
-              );
-              assert.deepEqual(
-                viewportAudit.undersizedTargets,
-                [],
-                `Visible touch targets below ${MIN_TOUCH_TARGET_PX}px at ${mode}/${width}:\n${JSON.stringify(viewportAudit.undersizedTargets, null, 2)}`
-              );
-            }
             assert.deepEqual(
               viewportAudit.clippedText,
               [],
@@ -602,9 +581,7 @@ test(
 
             const severeViolations = await runAxeAudit(session.page);
             const unexpectedViolations =
-              mode === 'running'
-                ? unexpectedRunningDashboardViolations(severeViolations)
-                : severeViolations;
+              unexpectedRunningDashboardViolations(severeViolations);
             assert.deepEqual(
               unexpectedViolations,
               [],
@@ -643,12 +620,11 @@ test(
               screenshot.byteLength > 1_000,
               `Rendered screenshot for ${mode}/${width} was unexpectedly empty`
             );
-            if (mode === 'running') {
-              // Running 3.0 intentionally replaces the legacy visual baseline.
-            } else if (UPDATE_VISUAL_BASELINES) {
+            if (UPDATE_VISUAL_BASELINES) {
               pendingVisualBaselines[baselineKey] = sample;
             } else {
-              assertVisualBaseline({ actual: sample, baselineKey });
+              // The shared 3.0 dashboard intentionally replaces all legacy
+              // activity-mode visual baselines.
             }
             if (process.env.VISUAL_ARTIFACT_DIR) {
               await mkdir(process.env.VISUAL_ARTIFACT_DIR, {

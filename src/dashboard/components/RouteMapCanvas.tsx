@@ -191,7 +191,16 @@ export function RouteMapCanvas({
     if (!map) return;
     let failed = false;
     const onError = (event: mapboxgl.ErrorEvent) => {
-      const code = (event.error as Error & { status?: number }).status;
+      const error = event.error as Error & { status?: number };
+      const code = error.status;
+      const message = error.message ?? '';
+      const isMissingCartoGlyph =
+        provider === 'carto' &&
+        (code === 404 || /\b404\b/.test(message)) &&
+        /(?:\/|%2F)fonts(?:\/|%2F)/i.test(message) &&
+        /\.pbf\b/i.test(message);
+
+      if (isMissingCartoGlyph) return;
       if (provider === 'mapbox' && (code === 401 || code === 403)) {
         setProvider('carto');
       } else {
