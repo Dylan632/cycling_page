@@ -915,11 +915,14 @@ test(
       releaseCyclingManifest = resolve;
     });
 
-    await session.context.route('**/data/cycling/manifest.json', async (route) => {
-      markCyclingManifestStarted();
-      await cyclingManifestGate;
-      await route.continue();
-    });
+    await session.context.route(
+      '**/data/cycling/manifest.json',
+      async (route) => {
+        markCyclingManifestStarted();
+        await cyclingManifestGate;
+        await route.continue();
+      }
+    );
 
     try {
       await openActivityPage(session.page, 'running');
@@ -943,7 +946,8 @@ test(
       );
       await runningDashboard.waitFor({ state: 'visible' });
       assert.ok(
-        ((await session.page.locator('#root').textContent()) ?? '').trim().length > 0,
+        ((await session.page.locator('#root').textContent()) ?? '').trim()
+          .length > 0,
         'the app root became blank while cycling data was preloading'
       );
 

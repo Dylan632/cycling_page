@@ -53,38 +53,38 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
                 }
               };
               return (
-              <Link
-                key={activity.mode}
-                to={targetHref}
-                onPointerEnter={preloadTarget}
-                onFocus={preloadTarget}
-                onClick={(event) => {
-                  if (
-                    activity.mode === mode ||
-                    event.button !== 0 ||
-                    event.metaKey ||
-                    event.ctrlKey ||
-                    event.shiftKey ||
-                    event.altKey
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  void preloadActivityMode(activity.mode)
-                    .catch(() => undefined)
-                    .then(() => navigate(targetHref));
-                }}
-                aria-current={activity.mode === mode ? 'page' : undefined}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                  activity.mode === mode
-                    ? 'bg-[var(--color-accent)] font-medium text-white'
-                    : 'text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'
-                }`}
-              >
-                {locale === 'zh'
-                  ? activity.label
-                  : englishModeLabel[activity.mode]}
-              </Link>
+                <Link
+                  key={activity.mode}
+                  to={targetHref}
+                  onPointerEnter={preloadTarget}
+                  onFocus={preloadTarget}
+                  onClick={(event) => {
+                    if (
+                      activity.mode === mode ||
+                      event.button !== 0 ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    void preloadActivityMode(activity.mode)
+                      .catch(() => undefined)
+                      .then(() => navigate(targetHref));
+                  }}
+                  aria-current={activity.mode === mode ? 'page' : undefined}
+                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                    activity.mode === mode
+                      ? 'bg-[var(--color-accent)] font-medium text-white'
+                      : 'text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {locale === 'zh'
+                    ? activity.label
+                    : englishModeLabel[activity.mode]}
+                </Link>
               );
             })}
           </nav>
