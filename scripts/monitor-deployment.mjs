@@ -425,13 +425,14 @@ const formatRemoteObject = (value) =>
   );
 
 const browserStateExpression = (mode) => `(() => {
+  const expectedMode = ${JSON.stringify(mode)};
   const marker = document.querySelector('[data-app-ready]');
   const markerMode = marker && marker.getAttribute('data-app-ready');
   const current = document.querySelector('a[aria-current="page"][href]');
   const root = document.querySelector('#root');
   const mapContainer = document.querySelector('#map-container');
   const renderer = document.querySelector('#map-container [data-map-renderer]');
-  if (mode === 'running' && markerMode === mode && !renderer && mapContainer) {
+  if (expectedMode === 'running' && markerMode === expectedMode && !renderer && mapContainer) {
     mapContainer.scrollIntoView({ block: 'center' });
   }
   return {
@@ -440,7 +441,7 @@ const browserStateExpression = (mode) => `(() => {
     markerMode,
     currentModePath: current
       ? new URL(current.href, window.location.href).pathname
-      : markerMode === mode
+      : markerMode === expectedMode
         ? window.location.pathname
         : null,
     hasFatalUi: document.body.textContent.includes('运动记录暂时无法加载'),
@@ -622,7 +623,7 @@ const runBrowserProbe = async ({
       );
       state = evaluated.result?.value;
       if (
-        state?.markerMode === mode &&
+        state?.markerMode === expectedMode &&
         state?.currentModePath === `/${mode}` &&
         state?.mapRenderer === 'mapbox'
       ) {
