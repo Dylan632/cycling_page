@@ -1,0 +1,35 @@
+name: Format Preview
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  preview:
+    if: contains(github.event.head_commit.message, '[format-preview]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Print exact Prettier diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm format
+          git --no-pager diff --             src/dashboard/components/RouteMapCanvas.tsx             src/dashboard/utils/mapRuntime.ts             test/route-geometry.test.mjs
