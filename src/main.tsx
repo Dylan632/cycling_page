@@ -10,7 +10,10 @@ import {
 } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import AppErrorBoundary from '@/components/AppErrorBoundary';
-import { ActivityModeProvider } from '@/modules/activity/ActivityModeProvider';
+import {
+  ActivityModeProvider,
+  useActivityMode,
+} from '@/modules/activity/ActivityModeProvider';
 import { isActivityMode } from '@/modules/activity/profiles';
 import {
   initializeGoogleAnalytics,
@@ -19,12 +22,28 @@ import {
 import '@/styles/index.css';
 import { withOptionalGAPageTracking } from './utils/trackRoute';
 
-const Index = lazy(() => import('./pages'));
+const LegacyIndex = lazy(() => import('./pages'));
+const RunningDashboard = lazy(() => import('./dashboard'));
 const HomePage = lazy(() => import('@/pages/total'));
 const NotFound = lazy(() => import('./pages/404'));
 const VercelObservability = lazy(
   () => import('@/components/VercelObservability')
 );
+
+const ActivityIndex = () => {
+  const { mode } = useActivityMode();
+  return mode === 'running' ? <RunningDashboard /> : <LegacyIndex />;
+};
+
+const ActivitySummary = () => {
+  const { mode } = useActivityMode();
+  return mode === 'running' ? <RunningDashboard /> : <HomePage />;
+};
+
+const ActivityTracks = () => {
+  const { mode } = useActivityMode();
+  return mode === 'running' ? <RunningDashboard /> : <NotFound />;
+};
 
 const createRouteElement = (element: React.ReactElement) =>
   withOptionalGAPageTracking(
@@ -82,11 +101,15 @@ const routes = createBrowserRouter(
       children: [
         {
           index: true,
-          element: createRouteElement(<Index />),
+          element: createRouteElement(<ActivityIndex />),
         },
         {
           path: 'summary',
-          element: createRouteElement(<HomePage />),
+          element: createRouteElement(<ActivitySummary />),
+        },
+        {
+          path: 'tracks',
+          element: createRouteElement(<ActivityTracks />),
         },
         {
           path: '*',

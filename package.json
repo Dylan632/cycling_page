@@ -13,6 +13,7 @@
     "@vercel/speed-insights": "^2.0.0",
     "@vitejs/plugin-react": "^6.0.1",
     "gcoord": "^1.0.7",
+    "html-to-image": "^1.11.13",
     "mapbox-gl": "^3.23.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
