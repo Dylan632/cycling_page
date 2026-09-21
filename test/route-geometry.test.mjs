@@ -671,13 +671,9 @@ test('dashboard performance units and track legends follow the activity mode', a
   assert.equal(getTrackColor('hiking', 12_000), '#15803d');
 });
 
-
 test('MapLibre uses Vite worker bundling in production', async () => {
   const source = await readFile(
-    new URL(
-      '../src/dashboard/components/RouteMapCanvas.tsx',
-      import.meta.url
-    ),
+    new URL('../src/dashboard/components/RouteMapCanvas.tsx', import.meta.url),
     'utf8'
   );
 
