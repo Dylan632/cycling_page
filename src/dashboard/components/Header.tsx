@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
 import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
 import { ACTIVITY_MODES } from '@/modules/activity/profiles';
+import { preloadActivityMode } from '@/hooks/useActivities';
 
 type Page = 'home' | 'tracks' | 'summary';
 
@@ -17,6 +18,7 @@ interface HeaderProps {
 export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
   const { locale, setLocale, t } = useLocale();
   const { mode, hrefForMode } = useActivityMode();
+  const navigate = useNavigate();
 
   const englishModeLabel = {
     running: 'Running',
@@ -43,10 +45,35 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
             aria-label={locale === 'zh' ? '运动类型切换' : 'Activity switcher'}
             className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-1"
           >
-            {ACTIVITY_MODES.map((activity) => (
+            {ACTIVITY_MODES.map((activity) => {
+              const targetHref = hrefForMode(activity.mode);
+              const preloadTarget = () => {
+                if (activity.mode !== mode) {
+                  void preloadActivityMode(activity.mode);
+                }
+              };
+              return (
               <Link
                 key={activity.mode}
-                to={hrefForMode(activity.mode)}
+                to={targetHref}
+                onPointerEnter={preloadTarget}
+                onFocus={preloadTarget}
+                onClick={(event) => {
+                  if (
+                    activity.mode === mode ||
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  void preloadActivityMode(activity.mode)
+                    .catch(() => undefined)
+                    .then(() => navigate(targetHref));
+                }}
                 aria-current={activity.mode === mode ? 'page' : undefined}
                 className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                   activity.mode === mode
@@ -58,7 +85,8 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
                   ? activity.label
                   : englishModeLabel[activity.mode]}
               </Link>
-            ))}
+              );
+            })}
           </nav>
         </div>
 

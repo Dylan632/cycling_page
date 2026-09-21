@@ -902,6 +902,65 @@ test(
 );
 
 test(
+  'activity mode switches keep the current dashboard visible while target data preloads',
+  { timeout: 90_000 },
+  async () => {
+    const session = await createBrowserPage(1280);
+    let releaseCyclingManifest;
+    let markCyclingManifestStarted;
+    const cyclingManifestStarted = new Promise((resolve) => {
+      markCyclingManifestStarted = resolve;
+    });
+    const cyclingManifestGate = new Promise((resolve) => {
+      releaseCyclingManifest = resolve;
+    });
+
+    await session.context.route('**/data/cycling/manifest.json', async (route) => {
+      markCyclingManifestStarted();
+      await cyclingManifestGate;
+      await route.continue();
+    });
+
+    try {
+      await openActivityPage(session.page, 'running');
+      const runningDashboard = session.page.locator(
+        '.dashboard[data-app-ready="running"]'
+      );
+      await runningDashboard.waitFor({ state: 'visible' });
+
+      const cyclingLink = session.page
+        .getByRole('navigation', { name: '运动类型切换' })
+        .getByRole('link', { name: '骑行' });
+
+      await cyclingLink.hover();
+      await cyclingManifestStarted;
+      await cyclingLink.click();
+
+      assert.equal(
+        new URL(session.page.url()).pathname,
+        '/running',
+        'mode navigation started before cycling data was ready'
+      );
+      await runningDashboard.waitFor({ state: 'visible' });
+      assert.ok(
+        ((await session.page.locator('#root').textContent()) ?? '').trim().length > 0,
+        'the app root became blank while cycling data was preloading'
+      );
+
+      releaseCyclingManifest();
+      await session.page.waitForURL((url) => url.pathname === '/cycling');
+      await session.page
+        .locator('.dashboard[data-app-ready="cycling"]')
+        .waitFor({ state: 'visible' });
+      session.assertNoRuntimeErrors();
+    } finally {
+      releaseCyclingManifest?.();
+      await session.context.close();
+    }
+  }
+);
+
+test(
   'switching activity modes keeps the map alive instead of crashing the page',
   { timeout: 90_000 },
   async () => {
