@@ -295,7 +295,11 @@ export function RouteMapCanvas({
         </div>
       </div>
       <div className="route-map-body">
-        <div ref={containerRef} className="h-full w-full" data-map-renderer="mapbox" />
+        <div
+          ref={containerRef}
+          className="h-full w-full"
+          data-map-renderer="mapbox"
+        />
         {!routes.length && (
           <div className="route-map-empty" role="status">
             {zh
