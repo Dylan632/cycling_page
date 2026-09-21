@@ -597,7 +597,6 @@ test('track-wall Carto tile cancellations do not mark the whole basemap as faile
   );
 });
 
-
 test('dashboard performance units and track legends follow the activity mode', async () => {
   const {
     formatActivityPerformance,
@@ -606,17 +605,14 @@ test('dashboard performance units and track legends follow the activity mode', a
     getTrackColor,
   } = await vite.ssrLoadModule('/src/dashboard/utils/activityPresentation.ts');
 
-  assert.deepEqual(
-    formatActivityPerformance(5, 'cycling', 'zh'),
-    {
-      label: '速度',
-      averageLabel: '均速',
-      bestLabel: '最高均速',
-      value: '18.0',
-      unit: 'km/h',
-      display: '18.0 km/h',
-    }
-  );
+  assert.deepEqual(formatActivityPerformance(5, 'cycling', 'zh'), {
+    label: '速度',
+    averageLabel: '均速',
+    bestLabel: '最高均速',
+    value: '18.0',
+    unit: 'km/h',
+    display: '18.0 km/h',
+  });
   assert.equal(
     formatActivityPerformance(10 / 3, 'running', 'zh').display,
     '5:00 /km'

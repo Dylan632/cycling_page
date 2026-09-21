@@ -46,8 +46,16 @@ function SummaryCard({
   const { mode } = useActivityMode();
   const stats = summarize(activities);
   const chart = summaryChart(activities, period, label);
-  const averagePerformance = formatActivityPerformance(stats.speed, mode, zh ? 'zh' : 'en');
-  const bestPerformance = formatActivityPerformance(stats.maxSpeed, mode, zh ? 'zh' : 'en');
+  const averagePerformance = formatActivityPerformance(
+    stats.speed,
+    mode,
+    zh ? 'zh' : 'en'
+  );
+  const bestPerformance = formatActivityPerformance(
+    stats.maxSpeed,
+    mode,
+    zh ? 'zh' : 'en'
+  );
   const metrics = [
     [zh ? '活动次数' : 'Activities', String(stats.count)],
     [

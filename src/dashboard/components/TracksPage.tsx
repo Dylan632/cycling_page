@@ -102,7 +102,6 @@ const TrackThumb = memo(function TrackThumb({
   );
 });
 
-
 export function TracksPage({
   activities,
   onBack,

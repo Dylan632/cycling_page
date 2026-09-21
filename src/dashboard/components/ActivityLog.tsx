@@ -133,10 +133,7 @@ export function ActivityLog({
             ['all', t('all')],
             ...distanceOptions.map(
               (distance) =>
-                [String(distance), `${distance}km+`] as [
-                  DistanceFilter,
-                  string,
-                ]
+                [String(distance), `${distance}km+`] as [DistanceFilter, string]
             ),
           ] as [DistanceFilter, string][]
         ).map(([val, label]) => (
@@ -216,7 +213,8 @@ export function ActivityLog({
                 </td>
                 <td className="py-3">
                   <span className="text-[var(--color-muted)]">
-                    {presentation.icon} {getActivityTypeLabel(mode, a.type, locale)}
+                    {presentation.icon}{' '}
+                    {getActivityTypeLabel(mode, a.type, locale)}
                   </span>
                 </td>
                 <td className="py-3">
@@ -232,7 +230,10 @@ export function ActivityLog({
                   {formatDuration(a.moving_time)}
                 </td>
                 <td className="py-3 text-[var(--color-muted)]">
-                  {formatActivityPerformance(a.average_speed, mode, locale).display}
+                  {
+                    formatActivityPerformance(a.average_speed, mode, locale)
+                      .display
+                  }
                 </td>
                 <td className="py-3 text-[var(--color-muted)]">
                   {a.average_heartrate ? Math.round(a.average_heartrate) : '--'}

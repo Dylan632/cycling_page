@@ -34,9 +34,7 @@ const ActivityTracks = () => <ActivityDashboard />;
 const createRouteElement = (element: React.ReactElement) =>
   withOptionalGAPageTracking(
     <AppErrorBoundary>
-      <Suspense fallback={null}>
-        {element}
-      </Suspense>
+      <Suspense fallback={null}>{element}</Suspense>
     </AppErrorBoundary>
   );
 
