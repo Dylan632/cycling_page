@@ -145,7 +145,10 @@ export function RouteMapCanvas({
 
   const drawRoutes = useCallback(() => {
     const map = mapRef.current;
-    if (!map || !styleReadyRef.current) return;
+    // isStyleLoaded() is the same check addSource makes internally. Trusting
+    // the ref alone let a stale `true` reach a freshly built map and throw
+    // "Style is not done loading", which took the whole page down.
+    if (!map || !styleReadyRef.current || !map.isStyleLoaded()) return;
     const data = { type: 'FeatureCollection' as const, features: routes };
     const source = map.getSource('routes') as
       | mapboxgl.GeoJSONSource
@@ -198,7 +201,7 @@ export function RouteMapCanvas({
       ...cameraRef.current,
       locale: zh
         ? {
-            'Map.Title': `${profile.label}路线地图`,
+            'Map.Title': '路线地图',
             'NavigationControl.ZoomIn': '放大',
             'NavigationControl.ZoomOut': '缩小',
             'NavigationControl.ResetBearing': '恢复朝北',
@@ -209,6 +212,10 @@ export function RouteMapCanvas({
         : {},
     });
     mapRef.current = map;
+    // A new map starts with the placeholder style and no layers, so every
+    // piece of per-map state has to start over with it.
+    styleReadyRef.current = false;
+    fittedRef.current = null;
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
     map.addControl(
       new mapboxgl.FullscreenControl({ container: panelRef.current }),
@@ -231,7 +238,18 @@ export function RouteMapCanvas({
       map.remove();
       mapRef.current = null;
     };
-  }, [zh, profile.label]);
+  }, [zh]);
+
+  // Naming the map after the active mode is a label change, not a reason to
+  // tear down the WebGL context and reload every tile on each mode switch.
+  useEffect(() => {
+    const container = mapRef.current?.getContainer();
+    if (!container) return;
+    container.setAttribute(
+      'aria-label',
+      zh ? `${profile.label}路线地图` : `${profile.label} route map`
+    );
+  }, [profile.label, zh]);
 
   useEffect(() => {
     const map = mapRef.current;

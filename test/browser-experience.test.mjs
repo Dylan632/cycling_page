@@ -790,6 +790,61 @@ test(
 );
 
 test(
+  'switching activity modes keeps the map alive instead of crashing the page',
+  { timeout: 90_000 },
+  async () => {
+    const session = await createBrowserPage(1280);
+    try {
+      await openActivityPage(session.page, 'running');
+
+      const mapStatus = session.page.locator('.route-map-footer');
+      await mapStatus.waitFor({ state: 'visible' });
+
+      const modeSwitcher = session.page.getByRole('navigation', {
+        name: '运动类型切换',
+      });
+
+      for (const [label, path] of [
+        ['骑行', '/cycling'],
+        ['徒步', '/hiking'],
+        ['跑步', '/running'],
+      ]) {
+        await modeSwitcher.getByRole('link', { name: label }).click();
+        await session.page.waitForURL((url) => url.pathname === path);
+        await session.page
+          .locator('.dashboard .activity-log-card')
+          .waitFor({ state: 'visible' });
+
+        // The map is rebuilt or re-fitted on every switch. A stale style ref
+        // used to make addSource throw "Style is not done loading", which the
+        // app error boundary turned into a full-page failure.
+        assert.equal(
+          await session.page.getByText('运动记录暂时无法加载').count(),
+          0,
+          `switching to ${label} rendered the fatal error boundary`
+        );
+        assert.equal(
+          await session.page
+            .locator('#map-container canvas.mapboxgl-canvas')
+            .count(),
+          1,
+          `switching to ${label} lost the map canvas`
+        );
+        assert.doesNotMatch(
+          (await mapStatus.textContent()) ?? '',
+          /加载失败|failed to load/i,
+          `switching to ${label} left the basemap in a failed state`
+        );
+      }
+
+      session.assertNoRuntimeErrors();
+    } finally {
+      await session.context.close();
+    }
+  }
+);
+
+test(
   'route data remains visible when WebGL is unavailable',
   {
     timeout: 60_000,
