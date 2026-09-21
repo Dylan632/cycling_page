@@ -303,6 +303,42 @@ test('browser diagnostics require the final mode marker and surface application 
       ],
     })
   );
+  // A basemap that really loads cancels in-flight tiles whenever fitBounds
+  // moves the camera, so the raster shards must be tolerated the same way.
+  for (const shard of ['a', 'b', 'c', 'd']) {
+    for (const theme of ['dark_all', 'light_all']) {
+      const tileUrl = `https://${shard}.basemaps.cartocdn.com/${theme}/10/857/418.png`;
+      assert.doesNotThrow(
+        () =>
+          validateBrowserProbe({
+            ...healthy,
+            failedRequests: [
+              {
+                url: `https://records.example/api/map-proxy?url=${encodeURIComponent(tileUrl)}`,
+                errorText: 'net::ERR_ABORTED',
+                responseStatus: null,
+              },
+            ],
+          }),
+        `cancelled ${shard}/${theme} raster tiles must not fail the probe`
+      );
+    }
+  }
+  assert.throws(
+    () =>
+      validateBrowserProbe({
+        ...healthy,
+        failedRequests: [
+          {
+            url: 'https://records.example/api/map-proxy?url=https%3A%2F%2Fevil.example.com%2Fdark_all%2F10%2F857%2F418.png',
+            errorText: 'net::ERR_ABORTED',
+            responseStatus: null,
+          },
+        ],
+      }),
+    /frontend failures/,
+    'only Carto basemap hosts may be excused'
+  );
   assert.throws(
     () =>
       validateBrowserProbe({

@@ -284,6 +284,10 @@ const isAllowedBrowserNoise = (message) => {
   );
 };
 
+// The raster basemaps come from `{a,b,c,d}.basemaps.cartocdn.com`; the
+// `tiles-*` hosts are kept so an older deployment still probes clean.
+const CARTO_TILE_HOSTNAME = /^(?:tiles-)?[a-d]\.basemaps\.cartocdn\.com$/i;
+
 const isAllowedFailedRequest = ({ url, errorText, responseStatus }) => {
   if (
     errorText === 'net::ERR_ABORTED' &&
@@ -301,7 +305,7 @@ const isAllowedFailedRequest = ({ url, errorText, responseStatus }) => {
     if (!targetValue) return false;
     const target = new URL(targetValue);
     return (
-      /^tiles-[a-d]\.basemaps\.cartocdn\.com$/i.test(target.hostname) &&
+      CARTO_TILE_HOSTNAME.test(target.hostname) &&
       /^\/(?:dark_all|light_all)\/\d+\/\d+\/\d+\.png$/i.test(target.pathname)
     );
   } catch {
@@ -633,7 +637,9 @@ const runBrowserProbe = async ({
     }
     await cdp.send('Page.navigate', { url: `${origin}/${mode}` }, sessionId);
 
-    const deadline = Date.now() + 15_000;
+    // The map arrives in a large lazy chunk and only mounts once its container
+    // scrolls into view, so give it room on a cold CDN before calling it dead.
+    const deadline = Date.now() + 30_000;
     let state;
     while (Date.now() < deadline) {
       const evaluated = await cdp.send(
