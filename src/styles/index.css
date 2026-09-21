@@ -269,13 +269,15 @@ hr {
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.kami-shell .mapboxgl-map {
+.kami-shell .mapboxgl-map,
+.kami-shell .maplibregl-map {
   overflow: hidden;
   border: 1px solid var(--kami-border);
   border-radius: 1.15rem;
 }
 
-[data-theme='dark'] .kami-shell .mapboxgl-map {
+[data-theme='dark'] .kami-shell .mapboxgl-map,
+[data-theme='dark'] .kami-shell .maplibregl-map {
   border-color: rgba(170, 190, 220, 0.22);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
@@ -342,30 +344,37 @@ hr {
   pointer-events: bounding-box;
 }
 
-.mapboxgl-ctrl-group {
+.mapboxgl-ctrl-group,
+.maplibregl-ctrl-group {
   border: 1px solid var(--kami-border) !important;
   border-radius: 0.75rem !important;
   background-color: var(--kami-ivory) !important;
   box-shadow: var(--kami-whisper-shadow) !important;
 }
 
-[data-theme='dark'] .mapboxgl-ctrl-group {
+[data-theme='dark'] .mapboxgl-ctrl-group,
+[data-theme='dark'] .maplibregl-ctrl-group {
   background-color: rgba(18, 29, 48, 0.88) !important;
   border-color: rgba(170, 190, 220, 0.22) !important;
 }
 
-.mapboxgl-ctrl button {
+.mapboxgl-ctrl button,
+.maplibregl-ctrl button {
   color: var(--kami-ink) !important;
 }
 
 [data-theme='dark'] .mapboxgl-ctrl button,
-[data-theme='dark'] .mapboxgl-ctrl button span {
+[data-theme='dark'] .maplibregl-ctrl button,
+[data-theme='dark'] .mapboxgl-ctrl button span,
+[data-theme='dark'] .maplibregl-ctrl button span {
   color: #dcecff !important;
   filter: invert(1) opacity(0.82);
 }
 
 [data-theme='dark'] .mapboxgl-ctrl-attrib,
-[data-theme='dark'] .mapboxgl-ctrl-attrib a {
+[data-theme='dark'] .maplibregl-ctrl-attrib,
+[data-theme='dark'] .mapboxgl-ctrl-attrib a,
+[data-theme='dark'] .maplibregl-ctrl-attrib a {
   color: rgba(220, 236, 255, 0.62) !important;
   background: rgba(12, 20, 35, 0.68) !important;
 }

@@ -639,29 +639,6 @@ test('the dashboard basemap requests Carto raster tiles from the raster shards',
   );
 });
 
-test('a missing Mapbox token never fails the token-free Carto basemap', async () => {
-  const { isMissingMapboxTokenError } = await vite.ssrLoadModule(
-    '/src/dashboard/utils/mapRuntime.ts'
-  );
-
-  assert.equal(
-    isMissingMapboxTokenError({
-      name: 'Error',
-      message:
-        'A valid Mapbox access token is required to use Mapbox GL JS. To create an account or a new access token, visit https://account.mapbox.com/',
-    }),
-    true
-  );
-  assert.equal(
-    isMissingMapboxTokenError({
-      status: 404,
-      message:
-        'Failed to load https://a.basemaps.cartocdn.com/dark_all/1/1/1.png',
-    }),
-    false
-  );
-});
-
 test('dashboard performance units and track legends follow the activity mode', async () => {
   const {
     formatActivityPerformance,

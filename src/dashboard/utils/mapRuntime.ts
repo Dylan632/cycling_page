@@ -21,17 +21,6 @@ export const CARTO_RASTER_TILE_HOSTS = [
 const CARTO_RASTER_HOST_PATTERN =
   /(?:\b[a-d]\.basemaps\.cartocdn\.com|tiles-[a-d]\.basemaps\.cartocdn\.com|\/api\/map-proxy)/i;
 
-/**
- * mapbox-gl reports a missing access token from its own session telemetry even
- * when the map only renders third-party tiles, so this error says nothing about
- * whether the Carto basemap loaded.
- */
-export const isMissingMapboxTokenError = (
-  error: MapRuntimeErrorLike
-): boolean =>
-  /access token/i.test(error.message ?? '') &&
-  /mapbox/i.test(error.message ?? '');
-
 export const isRecoverableCartoMapError = (
   error: MapRuntimeErrorLike
 ): boolean => {
