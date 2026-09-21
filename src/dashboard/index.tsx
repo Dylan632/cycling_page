@@ -124,6 +124,7 @@ function Dashboard() {
   return (
     <div
       className="dashboard min-h-screen bg-[var(--color-bg)]"
+      data-app-ready="running"
       data-filter={filter}
     >
       <Header
