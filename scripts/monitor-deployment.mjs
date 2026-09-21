@@ -284,6 +284,37 @@ const isAllowedBrowserNoise = (message) => {
   );
 };
 
+const isAllowedFailedRequest = ({
+  url,
+  errorText,
+  responseStatus,
+}) => {
+  if (
+    errorText === 'net::ERR_ABORTED' &&
+    responseStatus >= 200 &&
+    responseStatus < 300
+  ) {
+    return true;
+  }
+  if (errorText !== 'net::ERR_ABORTED') return false;
+
+  try {
+    const requestUrl = new URL(url);
+    if (requestUrl.pathname !== '/api/map-proxy') return false;
+    const targetValue = requestUrl.searchParams.get('url');
+    if (!targetValue) return false;
+    const target = new URL(targetValue);
+    return (
+      /^tiles-[a-d]\.basemaps\.cartocdn\.com$/i.test(target.hostname) &&
+      /^\/(?:dark_all|light_all)\/\d+\/\d+\/\d+\.png$/i.test(
+        target.pathname
+      )
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const validateBrowserProbe = ({
   origin,
   mode,
@@ -332,14 +363,7 @@ export const validateBrowserProbe = ({
     ...actionablePageErrors.map((message) => `pageerror: ${message}`),
     ...actionableConsoleErrors.map((message) => `console.error: ${message}`),
     ...failedRequests
-      .filter(
-        ({ errorText, responseStatus }) =>
-          !(
-            errorText === 'net::ERR_ABORTED' &&
-            responseStatus >= 200 &&
-            responseStatus < 300
-          )
-      )
+      .filter((request) => !isAllowedFailedRequest(request))
       .map(({ url, errorText }) => `request failed: ${url} (${errorText})`),
   ];
   if (failures.length > 0) {

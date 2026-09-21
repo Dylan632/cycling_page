@@ -291,6 +291,18 @@ test('browser diagnostics require the final mode marker and surface application 
       ],
     })
   );
+  assert.doesNotThrow(() =>
+    validateBrowserProbe({
+      ...healthy,
+      failedRequests: [
+        {
+          url: 'https://records.example/api/map-proxy?url=https%3A%2F%2Ftiles-a.basemaps.cartocdn.com%2Fdark_all%2F10%2F857%2F418.png',
+          errorText: 'net::ERR_ABORTED',
+          responseStatus: null,
+        },
+      ],
+    })
+  );
   assert.throws(
     () =>
       validateBrowserProbe({
