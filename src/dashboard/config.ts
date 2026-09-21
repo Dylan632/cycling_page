@@ -8,7 +8,7 @@ export interface GoalConfig {
 }
 
 export const DEFAULT_LOCALE: Locale = 'zh';
-export const DEFAULT_THEME: 'light' | 'dark' | 'system' = 'system';
+export const DEFAULT_THEME: 'light' | 'dark' | 'system' = 'dark';
 
 export const DEFAULT_GOAL: GoalConfig = {
   yearly: 2000,
@@ -22,5 +22,6 @@ export const GOALS: Record<string, GoalConfig> = {
   Run: DEFAULT_GOAL,
 };
 
-export const AVATAR = 'https://github.com/Dylan632.png';
+export const AVATAR =
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQTtc69JxHNmN1ETpMUX4dozAgAN6iPjWalQ&usqp=CAU';
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
