@@ -13,6 +13,7 @@ import {
 } from '../utils/mapRuntime';
 import './RouteMap.css';
 
+// MapLibre v6 needs an explicit Vite-emitted worker URL in production builds.
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 export interface RouteMapProps {
