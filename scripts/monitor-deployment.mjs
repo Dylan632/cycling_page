@@ -432,7 +432,12 @@ const browserStateExpression = (mode) => `(() => {
   const root = document.querySelector('#root');
   const mapContainer = document.querySelector('#map-container');
   const renderer = document.querySelector('#map-container [data-map-renderer]');
-  if (expectedMode === 'running' && markerMode === expectedMode && !renderer && mapContainer) {
+  if (
+    expectedMode === 'running' &&
+    markerMode === expectedMode &&
+    !renderer &&
+    mapContainer
+  ) {
     mapContainer.scrollIntoView({ block: 'center' });
   }
   return {
