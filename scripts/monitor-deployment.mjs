@@ -426,14 +426,19 @@ const formatRemoteObject = (value) =>
 
 const browserStateExpression = (mode) => `(() => {
   const marker = document.querySelector('[data-app-ready]');
+  const markerMode = marker && marker.getAttribute('data-app-ready');
   const current = document.querySelector('a[aria-current="page"][href]');
   const root = document.querySelector('#root');
   const renderer = document.querySelector('#map-container [data-map-renderer]');
   return {
     href: window.location.href,
     rootHasContent: Boolean(root && root.textContent && root.textContent.trim()),
-    markerMode: marker && marker.getAttribute('data-app-ready'),
-    currentModePath: current && new URL(current.href, window.location.href).pathname,
+    markerMode,
+    currentModePath: current
+      ? new URL(current.href, window.location.href).pathname
+      : markerMode === mode
+        ? window.location.pathname
+        : null,
     hasFatalUi: document.body.textContent.includes('运动记录暂时无法加载'),
     mapRenderer: renderer && renderer.getAttribute('data-map-renderer')
   };
