@@ -29,6 +29,18 @@ const EMPTY_MAP_STYLE = JSON.stringify({
   sources: {},
   layers: [],
 });
+const OPENFREEMAP_TEST_STYLE = JSON.stringify({
+  version: 8,
+  name: 'OpenFreeMap browser fixture',
+  sources: {
+    basemap: {
+      type: 'raster',
+      tiles: ['https://tiles.openfreemap.org/test/{z}/{x}/{y}.png'],
+      tileSize: 256,
+    },
+  },
+  layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
+});
 const TRANSPARENT_MAP_TILE = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64'
@@ -197,7 +209,21 @@ const createBrowserPage = async (width, { forceNoWebGL = false } = {}) => {
   }
 
   // The map layout itself is under test, while third-party map resources are
-  // replaced with deterministic fixtures so CI never depends on Carto uptime.
+  // replaced with deterministic fixtures so CI never depends on map-provider uptime.
+  await context.route('https://tiles.openfreemap.org/styles/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: OPENFREEMAP_TEST_STYLE,
+    })
+  );
+  await context.route('https://tiles.openfreemap.org/test/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: TRANSPARENT_MAP_TILE,
+    })
+  );
   await context.route('https://basemaps.cartocdn.com/**', (route) =>
     route.fulfill({
       status: 200,
@@ -857,19 +883,17 @@ test(
   async () => {
     const session = await createBrowserPage(1280);
     try {
-      // Registered after the shared fixtures, so it wins: an opaque tile makes
+      // Registered after the shared fixture, so it wins: an opaque tile makes
       // "painted" and "painted nothing" distinguishable.
-      for (const shard of ['a', 'b', 'c', 'd']) {
-        await session.context.route(
-          `https://${shard}.basemaps.cartocdn.com/**`,
-          (route) =>
-            route.fulfill({
-              status: 200,
-              contentType: 'image/png',
-              body: OPAQUE_MAP_TILE,
-            })
-        );
-      }
+      await session.context.route(
+        'https://tiles.openfreemap.org/test/**',
+        (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: 'image/png',
+            body: OPAQUE_MAP_TILE,
+          })
+      );
 
       await openActivityPage(session.page, 'running');
       await session.page
