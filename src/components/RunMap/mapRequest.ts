@@ -1,4 +1,4 @@
-const CARTO_PROXY_ROUTES = {
+const MAP_PROXY_HOSTS = {
   'basemaps.cartocdn.com': '/map-proxy/style',
   'tiles.basemaps.cartocdn.com': '/map-proxy/tiles',
   'tiles-a.basemaps.cartocdn.com': '/map-proxy/tiles',
@@ -9,14 +9,15 @@ const CARTO_PROXY_ROUTES = {
   'b.basemaps.cartocdn.com': '/map-proxy/tiles',
   'c.basemaps.cartocdn.com': '/map-proxy/tiles',
   'd.basemaps.cartocdn.com': '/map-proxy/tiles',
+  'tiles.openfreemap.org': '/map-proxy/openfreemap',
 } as const;
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 /**
- * Build a same-origin URL for a Carto resource. The Vercel Function receives
- * the encoded target and fetches it server-side, so the browser does not need
- * direct access to Carto.
+ * Build a same-origin URL for an allowlisted map resource. The Vercel
+ * Function receives the encoded target and fetches it server-side, so the
+ * browser does not need direct access to the upstream tile provider.
  */
 export const getCartoProxyUrl = (
   requestUrl: string,
@@ -25,7 +26,7 @@ export const getCartoProxyUrl = (
   try {
     const target = new URL(requestUrl);
     const proxyPath =
-      CARTO_PROXY_ROUTES[target.hostname as keyof typeof CARTO_PROXY_ROUTES];
+      MAP_PROXY_HOSTS[target.hostname as keyof typeof MAP_PROXY_HOSTS];
     if (target.protocol !== 'https:' || !proxyPath) return null;
 
     const proxyUrl = new URL('/api/map-proxy', origin);
@@ -37,8 +38,9 @@ export const getCartoProxyUrl = (
 };
 
 /**
- * Keep local development and browser tests direct, but proxy Carto resources
- * from deployed pages so the browser never has to reach Carto itself.
+ * Keep local development and browser tests direct, but proxy supported map
+ * resources from deployed pages so the browser never has to reach the
+ * upstream tile provider itself.
  */
 export const transformCartoRequest = (requestUrl: string): { url: string } => {
   if (typeof window === 'undefined') return { url: requestUrl };

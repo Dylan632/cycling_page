@@ -284,9 +284,11 @@ const isAllowedBrowserNoise = (message) => {
   );
 };
 
-// The raster basemaps come from `{a,b,c,d}.basemaps.cartocdn.com`; the
-// `tiles-*` hosts are kept so an older deployment still probes clean.
+// Keep tolerating cancelled requests from the previous Carto raster
+// implementation while also accepting normal OpenFreeMap resource
+// cancellations caused by camera/style changes.
 const CARTO_TILE_HOSTNAME = /^(?:tiles-)?[a-d]\.basemaps\.cartocdn\.com$/i;
+const OPENFREEMAP_HOSTNAME = 'tiles.openfreemap.org';
 
 const isAllowedFailedRequest = ({ url, errorText, responseStatus }) => {
   if (
@@ -304,6 +306,12 @@ const isAllowedFailedRequest = ({ url, errorText, responseStatus }) => {
     const targetValue = requestUrl.searchParams.get('url');
     if (!targetValue) return false;
     const target = new URL(targetValue);
+    if (
+      target.protocol === 'https:' &&
+      target.hostname === OPENFREEMAP_HOSTNAME
+    ) {
+      return true;
+    }
     return (
       CARTO_TILE_HOSTNAME.test(target.hostname) &&
       /^\/(?:dark_all|light_all)\/\d+\/\d+\/\d+\.png$/i.test(target.pathname)

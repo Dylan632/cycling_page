@@ -7,10 +7,6 @@ import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
 import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
 import { transformCartoRequest } from '@/components/RunMap/mapRequest';
-import {
-  CARTO_RASTER_TILE_HOSTS,
-  isRecoverableCartoMapError,
-} from '../utils/mapRuntime';
 import './RouteMap.css';
 
 // MapLibre v6 needs an explicit Vite-emitted worker URL in production builds.
@@ -32,36 +28,13 @@ const routeCache = new WeakMap<
   }[]
 >();
 
-const createCartoRasterStyle = (
-  dark?: boolean
-): maplibregl.StyleSpecification => {
-  const theme = dark === false ? 'light_all' : 'dark_all';
-  // Carto serves the raster basemaps from the plain shard hosts; the
-  // `tiles-*` hosts only answer for vector tiles and 404 on every PNG.
-  const tileHosts = CARTO_RASTER_TILE_HOSTS;
+const OPENFREEMAP_STYLE_URLS = {
+  light: 'https://tiles.openfreemap.org/styles/positron',
+  dark: 'https://tiles.openfreemap.org/styles/dark',
+} as const;
 
-  return {
-    version: 8,
-    sources: {
-      'carto-raster': {
-        type: 'raster',
-        tiles: tileHosts.map(
-          (host) => `https://${host}/${theme}/{z}/{x}/{y}.png`
-        ),
-        tileSize: 256,
-        maxzoom: 20,
-        attribution: '© OpenStreetMap contributors © CARTO',
-      },
-    },
-    layers: [
-      {
-        id: 'carto-raster',
-        type: 'raster',
-        source: 'carto-raster',
-      },
-    ],
-  };
-};
+const getOpenFreeMapStyle = (dark?: boolean) =>
+  dark === false ? OPENFREEMAP_STYLE_URLS.light : OPENFREEMAP_STYLE_URLS.dark;
 
 export function RouteMapCanvas({
   activities,
@@ -82,10 +55,7 @@ export function RouteMapCanvas({
     'loading'
   );
   const [retry, setRetry] = useState(0);
-  const style = useMemo<maplibregl.StyleSpecification>(
-    () => createCartoRasterStyle(dark),
-    [dark]
-  );
+  const style = useMemo(() => getOpenFreeMapStyle(dark), [dark]);
 
   const routes = useMemo(() => {
     const items = selectedActivity ? [selectedActivity] : activities;
@@ -251,28 +221,37 @@ export function RouteMapCanvas({
     const map = mapRef.current;
     if (!map) return;
     let failed = false;
+    let resourceErrorCount = 0;
     const onError = (event: maplibregl.ErrorEvent) => {
       const error = event.error as Error & {
         name?: string;
         status?: number;
         url?: string;
       };
-      const code = error.status;
-      const message = error.message ?? '';
-      const isMissingCartoGlyph =
-        (code === 404 || /\b404\b/.test(message)) &&
-        /(?:\/|%2F)fonts(?:\/|%2F)/i.test(message) &&
-        /\.pbf\b/i.test(message);
-      const isRecoverableCartoError =
-        isRecoverableCartoMapError(error) ||
-        (styleReadyRef.current && (code === 404 || /\b404\b/.test(message)));
+      const details = [error.name, error.message, error.url]
+        .filter(Boolean)
+        .join(' ');
 
-      if (isMissingCartoGlyph || isRecoverableCartoError) return;
+      // MapLibre routinely aborts obsolete tile/glyph requests while fitting
+      // bounds or replacing a style. Those cancellations are not map failures.
+      if (/\b(?:abort(?:ed)?|cancel(?:led|ed)?)\b/i.test(details)) return;
+
+      // Once the style is usable, tolerate a small number of transient
+      // resource failures. If the provider is actually unreachable, the
+      // repeated failures still surface the retry UI.
+      if (styleReadyRef.current) {
+        resourceErrorCount += 1;
+        if (resourceErrorCount < 12) return;
+      }
+
       failed = true;
       setStatus('error');
     };
     const onIdle = () => {
-      if (!failed) setStatus('ready');
+      if (!styleReadyRef.current) return;
+      failed = false;
+      resourceErrorCount = 0;
+      setStatus('ready');
     };
     const onLoading = () => setStatus('loading');
     map.on('error', onError);
@@ -392,8 +371,8 @@ export function RouteMapCanvas({
                 ? '正在加载地图…'
                 : 'Loading map…'
               : zh
-                ? '底图 · CARTO'
-                : 'Basemap · CARTO'}
+                ? '底图 · OpenFreeMap'
+                : 'Basemap · OpenFreeMap'}
         </span>
         {status === 'error' && (
           <button
