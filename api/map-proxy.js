@@ -1,4 +1,4 @@
-const CARTO_HOSTNAMES = new Set([
+const MAP_HOSTNAMES = new Set([
   'basemaps.cartocdn.com',
   'tiles.basemaps.cartocdn.com',
   'tiles-a.basemaps.cartocdn.com',
@@ -9,6 +9,7 @@ const CARTO_HOSTNAMES = new Set([
   'b.basemaps.cartocdn.com',
   'c.basemaps.cartocdn.com',
   'd.basemaps.cartocdn.com',
+  'tiles.openfreemap.org',
 ]);
 
 const getTargetUrl = (value) => {
@@ -17,7 +18,7 @@ const getTargetUrl = (value) => {
   try {
     const target = new URL(value);
     if (target.protocol !== 'https:') return null;
-    if (!CARTO_HOSTNAMES.has(target.hostname)) return null;
+    if (!MAP_HOSTNAMES.has(target.hostname)) return null;
     return target;
   } catch {
     return null;
@@ -28,7 +29,7 @@ export default async function handler(request, response) {
   const target = getTargetUrl(request.query?.url);
   if (!target) {
     response.statusCode = 400;
-    response.end('Invalid Carto resource URL');
+    response.end('Invalid map resource URL');
     return;
   }
 
@@ -44,7 +45,8 @@ export default async function handler(request, response) {
       method: request.method,
       headers: {
         accept: request.headers.accept ?? '*/*',
-        'user-agent': 'yihong.run map proxy',
+        'user-agent':
+          'running-page-map-proxy/1.0 (+https://github.com/Dylan632/cycling_page)',
       },
     });
 
@@ -67,8 +69,8 @@ export default async function handler(request, response) {
 
     response.end(Buffer.from(await upstream.arrayBuffer()));
   } catch (error) {
-    console.error('Carto map proxy failed', error);
+    console.error('Map resource proxy failed', error);
     response.statusCode = 502;
-    response.end('Carto map resource unavailable');
+    response.end('Map resource unavailable');
   }
 }
