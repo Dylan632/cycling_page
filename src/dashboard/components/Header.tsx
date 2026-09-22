@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
@@ -19,6 +20,8 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
   const { locale, setLocale, t } = useLocale();
   const { mode, hrefForMode } = useActivityMode();
   const navigate = useNavigate();
+  // Mirrors src/pages/index.tsx: only the newest request may commit a route.
+  const navigationRequestRef = useRef(0);
 
   const englishModeLabel = {
     running: 'Running',
@@ -49,7 +52,11 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
               const targetHref = hrefForMode(activity.mode);
               const preloadTarget = () => {
                 if (activity.mode !== mode) {
-                  void preloadActivityMode(activity.mode);
+                  // Symmetric with the click path below: a speculative warm-up
+                  // must never surface as an unhandled rejection.
+                  void preloadActivityMode(activity.mode).catch(
+                    () => undefined
+                  );
                 }
               };
               return (
@@ -70,9 +77,16 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
                       return;
                     }
                     event.preventDefault();
+                    const requestId = (navigationRequestRef.current += 1);
                     void preloadActivityMode(activity.mode)
                       .catch(() => undefined)
-                      .then(() => navigate(targetHref));
+                      .then(() => {
+                        // Modes warm up at different speeds, so without this a
+                        // user who changes their mind lands on the tab they
+                        // abandoned as soon as its larger payload arrives.
+                        if (navigationRequestRef.current !== requestId) return;
+                        navigate(targetHref);
+                      });
                   }}
                   aria-current={activity.mode === mode ? 'page' : undefined}
                   className={`rounded-md px-3 py-1.5 text-sm transition-colors ${

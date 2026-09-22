@@ -166,6 +166,107 @@ after(async () => {
   globalThis.fetch = previousFetch;
 });
 
+test('a failed mode preload does not poison the click that follows', async () => {
+  const stableJson = (value) => `${JSON.stringify(value)}\n`;
+  const sha = (text) => createHash('sha256').update(text).digest('hex');
+  const metadata = [
+    {
+      run_id: '9',
+      name: 'Evening ride',
+      distance: 18_000,
+      moving_time: '00:50:00',
+      type: 'Ride',
+      subtype: 'cycling',
+      start_date_local: '2026-07-24 18:00:00',
+      location_country: 'China',
+      average_heartrate: 128,
+      elevation_gain: 80,
+      average_speed: 6,
+      streak: 1,
+    },
+  ];
+  const routes = [{ run_id: '9', summary_polyline: '_jg_E_bg}Uo}@o}@o}@_|B' }];
+  const metadataText = stableJson(metadata);
+  const routesText = stableJson(routes);
+  const metadataChecksum = sha(metadataText);
+  const routesChecksum = sha(routesText);
+  const responses = new Map([
+    [
+      '/data/cycling/manifest.json',
+      stableJson({
+        schemaVersion: 1,
+        mode: 'cycling',
+        activityCount: 1,
+        publishedAt: '2026-07-26T12:30:00.000Z',
+        latestActivityDate: metadata[0].start_date_local,
+        latestYear: '2026',
+        years: ['2026'],
+        routeCount: 1,
+        routeRatio: 1,
+        checksum: '1'.repeat(64),
+        artifactChecksum: '2'.repeat(64),
+        metadataChecksum,
+        routeChecksums: { 2026: routesChecksum },
+        source: 'cycling.json',
+      }),
+    ],
+    [`/data/cycling/metadata.json?v=${metadataChecksum}`, metadataText],
+    [`/data/cycling/routes/2026.json?v=${routesChecksum}`, routesText],
+  ]);
+
+  // The repository captures globalThis.fetch as a default parameter when its
+  // module is first evaluated, so the stub has to be installed before the
+  // module is loaded — hence a server of its own.
+  const previousFetch = globalThis.fetch;
+  const requested = [];
+  let offline = true;
+  globalThis.fetch = async (url) => {
+    const path = String(url);
+    requested.push(path);
+    if (offline) throw new TypeError('Failed to fetch');
+    return new Response(responses.get(path) ?? '', {
+      status: responses.has(path) ? 200 : 404,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const isolated = await createServer({
+    appType: 'custom',
+    optimizeDeps: { noDiscovery: true },
+    // hmr: false keeps this second server off the shared HMR port.
+    server: { middlewareMode: true, hmr: false },
+  });
+
+  try {
+    const { preloadActivityMode, loadActivitiesWithRoutes } =
+      await isolated.ssrLoadModule('/src/hooks/useActivities.ts');
+
+    // A pointer crossing the switcher while the network is down must resolve,
+    // and must not leave a cached rejection behind: the resource cache keeps
+    // failures for the life of the page, so the click that follows on a
+    // recovered connection would otherwise replay this one into the error
+    // boundary, for a mode the user never even selected.
+    await preloadActivityMode('cycling');
+
+    // Once the network recovers the mode has to warm up for real. A cached
+    // rejection would make this second attempt return early instead, never
+    // reaching the route payload.
+    offline = false;
+    requested.length = 0;
+    await preloadActivityMode('cycling');
+    assert.ok(
+      requested.some((path) => path.includes('/routes/2026.json')),
+      'a speculative hover poisoned the mode it was only guessing about'
+    );
+
+    const activities = await loadActivitiesWithRoutes('cycling', ['2026']);
+    assert.equal(activities.length, 1);
+  } finally {
+    await isolated.close();
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('activity filtering and metrics use the requested runtime mode', async () => {
   const { isSelectedActivity } = await vite.ssrLoadModule(
     '/src/utils/activityMode.ts'

@@ -236,8 +236,28 @@ test('browser diagnostics require the final mode marker and surface application 
       currentModePath: '/cycling',
       hasFatalUi: false,
       mapRenderer: 'maplibre',
+      basemapStatus: 'ready',
     },
   };
+  // data-map-renderer is static markup, so it stayed 'maplibre' through a map
+  // that painted nothing at all. The basemap's own state has to be checked.
+  assert.throws(
+    () =>
+      validateBrowserProbe({
+        ...healthy,
+        state: { ...healthy.state, basemapStatus: 'error' },
+      }),
+    /failed basemap/,
+    'the probe accepted a deployment whose basemap reported failure'
+  );
+  assert.doesNotThrow(
+    () =>
+      validateBrowserProbe({
+        ...healthy,
+        state: { ...healthy.state, basemapStatus: 'loading' },
+      }),
+    'a basemap still loading when sampled must not fail the probe'
+  );
   assert.doesNotThrow(() =>
     validateBrowserProbe({
       ...healthy,

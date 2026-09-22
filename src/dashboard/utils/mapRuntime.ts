@@ -6,41 +6,56 @@ export interface MapRuntimeErrorLike {
 }
 
 /**
- * Carto publishes the raster basemaps (`dark_all`, `light_all`) on these shard
- * hosts. The similarly named `tiles-*.basemaps.cartocdn.com` hosts only answer
- * for vector tiles, so asking them for a PNG returns 404 for every tile and
- * leaves the map blank.
+ * MapLibre aborts obsolete tile and glyph requests whenever the camera moves
+ * or the style is replaced. Those cancellations are routine, not failures.
  */
-export const CARTO_RASTER_TILE_HOSTS = [
-  'a.basemaps.cartocdn.com',
-  'b.basemaps.cartocdn.com',
-  'c.basemaps.cartocdn.com',
-  'd.basemaps.cartocdn.com',
-] as const;
-
-const CARTO_RASTER_HOST_PATTERN =
-  /(?:\b[a-d]\.basemaps\.cartocdn\.com|tiles-[a-d]\.basemaps\.cartocdn\.com|\/api\/map-proxy)/i;
-
-export const isRecoverableCartoMapError = (
-  error: MapRuntimeErrorLike
-): boolean => {
-  const details = [error.name, error.message, error.url]
-    .filter(Boolean)
-    .join(' ');
-
-  if (/\b(?:abort(?:ed)?|cancel(?:led|ed)?)\b/i.test(details)) {
-    return true;
-  }
-
-  const isRasterTileRequest =
-    CARTO_RASTER_HOST_PATTERN.test(details) &&
-    /(?:dark_all|light_all|\.png(?:\b|[?#]))/i.test(details);
-
-  if (!isRasterTileRequest) return false;
-
-  return (
-    error.status === 404 ||
-    /\b404\b/.test(details) ||
-    /(?:failed to fetch|failed to load|networkerror)/i.test(details)
+export const isCancelledMapRequest = (error: MapRuntimeErrorLike): boolean => {
+  // A DOMException carries the reason in `name` alone, and `\babort\b` does not
+  // match inside "AbortError" — there is no word boundary before "Error".
+  if (/^(?:abort|cancel)/i.test(error.name ?? '')) return true;
+  return /\b(?:abort(?:ed)?|cancel(?:led|ed)?)\b/i.test(
+    [error.message, error.url].filter(Boolean).join(' ')
   );
+};
+
+/** Failures tolerated after the style loads before the basemap is called down. */
+export const TRANSIENT_BASEMAP_ERROR_LIMIT = 12;
+
+export type BasemapStatus = 'ready' | 'error';
+
+/**
+ * Turns MapLibre's error and idle events into a basemap status.
+ *
+ * A failure has to latch. MapLibre counts a tile that failed to load as loaded
+ * and still reaches idle, so treating idle as proof of health would clear the
+ * error — and the retry control with it — for a provider that is unreachable.
+ */
+export const createBasemapStatusTracker = (
+  transientErrorLimit: number = TRANSIENT_BASEMAP_ERROR_LIMIT
+) => {
+  let failed = false;
+  let transientErrors = 0;
+
+  return {
+    /** The status this error should apply, or null to ignore it. */
+    error(
+      error: MapRuntimeErrorLike,
+      styleReady: boolean
+    ): BasemapStatus | null {
+      if (isCancelledMapRequest(error)) return null;
+      if (styleReady) {
+        transientErrors += 1;
+        if (transientErrors < transientErrorLimit) return null;
+      }
+      failed = true;
+      return 'error';
+    },
+
+    /** The status this idle event should apply, or null to ignore it. */
+    idle(styleReady: boolean): BasemapStatus | null {
+      if (!styleReady || failed) return null;
+      transientErrors = 0;
+      return 'ready';
+    },
+  };
 };

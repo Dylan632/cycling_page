@@ -576,67 +576,80 @@ test('proxies Carto resources through the deployed site origin', async () => {
   );
 });
 
-test('track-wall Carto tile cancellations do not mark the whole basemap as failed', async () => {
-  const { isRecoverableCartoMapError } = await vite.ssrLoadModule(
+test('a cancelled map request is never mistaken for a basemap failure', async () => {
+  const { isCancelledMapRequest } = await vite.ssrLoadModule(
     '/src/dashboard/utils/mapRuntime.ts'
   );
 
   assert.equal(
-    isRecoverableCartoMapError({
-      name: 'AbortError',
-      message: 'The operation was aborted.',
-    }),
+    isCancelledMapRequest({ name: 'AbortError' }),
+    true,
+    'a DOMException carries the reason in name alone'
+  );
+  assert.equal(isCancelledMapRequest({ name: 'CanceledError' }), true);
+  assert.equal(
+    isCancelledMapRequest({ message: 'The operation was aborted.' }),
     true
   );
   assert.equal(
-    isRecoverableCartoMapError({
-      status: 404,
-      message:
-        'Failed to load https://records.example/api/map-proxy?url=https%3A%2F%2Ftiles-a.basemaps.cartocdn.com%2Fdark_all%2F11%2F1712%2F836.png',
-    }),
-    true
-  );
-  assert.equal(
-    isRecoverableCartoMapError({
-      status: 404,
-      message:
-        'Failed to load https://records.example/api/map-proxy?url=https%3A%2F%2Fa.basemaps.cartocdn.com%2Fdark_all%2F11%2F1712%2F836.png',
-    }),
-    true
-  );
-  assert.equal(
-    isRecoverableCartoMapError({
-      status: 500,
-      message: 'WebGL context creation failed',
-    }),
+    isCancelledMapRequest({ message: 'Failed to fetch', status: 500 }),
     false
   );
 });
 
-test('the dashboard basemap requests Carto raster tiles from the raster shards', async () => {
-  const { CARTO_RASTER_TILE_HOSTS } = await vite.ssrLoadModule(
+test('a failed basemap stays failed through the idle events that follow', async () => {
+  const { createBasemapStatusTracker } = await vite.ssrLoadModule(
     '/src/dashboard/utils/mapRuntime.ts'
   );
 
-  assert.deepEqual(
-    [...CARTO_RASTER_TILE_HOSTS],
-    [
-      'a.basemaps.cartocdn.com',
-      'b.basemaps.cartocdn.com',
-      'c.basemaps.cartocdn.com',
-      'd.basemaps.cartocdn.com',
-    ],
-    'the tiles-* hosts only serve vector tiles and 404 on every raster PNG'
+  const tracker = createBasemapStatusTracker(3);
+  const failing = { message: 'Failed to load tile', status: 502 };
+
+  // Transient failures are tolerated while the style is usable.
+  assert.equal(tracker.error(failing, true), null);
+  assert.equal(tracker.error(failing, true), null);
+  assert.equal(tracker.error(failing, true), 'error');
+
+  // MapLibre marks a tile that failed to load as loaded and still fires idle.
+  // Clearing the failure there would hide the retry control from a provider
+  // that is genuinely unreachable.
+  assert.equal(
+    tracker.idle(true),
+    null,
+    'idle cleared a latched basemap failure'
+  );
+  assert.equal(tracker.idle(true), null);
+});
+
+test('transient basemap errors clear once the map reaches idle', async () => {
+  const { createBasemapStatusTracker } = await vite.ssrLoadModule(
+    '/src/dashboard/utils/mapRuntime.ts'
   );
 
-  const source = await readFile(
-    new URL('../src/dashboard/components/RouteMapCanvas.tsx', import.meta.url),
-    'utf8'
+  const tracker = createBasemapStatusTracker(3);
+  const failing = { message: 'Failed to load tile', status: 502 };
+
+  assert.equal(tracker.error(failing, true), null);
+  assert.equal(tracker.error(failing, true), null);
+  assert.equal(tracker.idle(true), 'ready');
+
+  // The counter restarted, so the next two failures are tolerated again.
+  assert.equal(tracker.error(failing, true), null);
+  assert.equal(tracker.error(failing, true), null);
+  assert.equal(tracker.error(failing, true), 'error');
+});
+
+test('a failure before the style loads fails the basemap immediately', async () => {
+  const { createBasemapStatusTracker } = await vite.ssrLoadModule(
+    '/src/dashboard/utils/mapRuntime.ts'
   );
-  assert.ok(
-    !/tiles-[a-d]\.basemaps\.cartocdn\.com/.test(source),
-    'the raster basemap must not be pinned to the vector-tile hosts'
+
+  const tracker = createBasemapStatusTracker();
+  assert.equal(
+    tracker.error({ message: 'Failed to fetch style', status: 404 }, false),
+    'error'
   );
+  assert.equal(tracker.idle(false), null);
 });
 
 test('dashboard performance units and track legends follow the activity mode', async () => {
