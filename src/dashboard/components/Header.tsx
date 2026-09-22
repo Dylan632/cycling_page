@@ -49,7 +49,11 @@ export function Header({ dark, toggleTheme, page, onNavigate }: HeaderProps) {
               const targetHref = hrefForMode(activity.mode);
               const preloadTarget = () => {
                 if (activity.mode !== mode) {
-                  void preloadActivityMode(activity.mode);
+                  // Symmetric with the click path below: a speculative warm-up
+                  // must never surface as an unhandled rejection.
+                  void preloadActivityMode(activity.mode).catch(
+                    () => undefined
+                  );
                 }
               };
               return (

@@ -28,6 +28,7 @@ const standardizeCountryName = (country: string): string => {
 interface SuspenseResource<Result> {
   preload: () => Promise<void>;
   read: () => Result;
+  rejected: () => boolean;
 }
 
 const activityResources = new Map<string, SuspenseResource<Activity[]>>();
@@ -51,6 +52,7 @@ const createResource = <Result>(
 
   return {
     preload: () => promise,
+    rejected: () => status === 'rejected',
     read: () => {
       if (status === 'pending') throw promise;
       if (status === 'rejected') throw failure;
@@ -59,11 +61,27 @@ const createResource = <Result>(
   };
 };
 
+const activityResourceKey = (mode: ActivityMode, years: string[] | null) =>
+  years ? `${mode}:${years.join(',')}` : `${mode}:metadata`;
+
+/**
+ * Drops a cached resource, but only if it is still the one that failed. A
+ * newer resource for the same key belongs to a later request and must survive.
+ */
+const forgetActivityResource = (
+  mode: ActivityMode,
+  years: string[] | null,
+  resource: SuspenseResource<Activity[]>
+) => {
+  const key = activityResourceKey(mode, years);
+  if (activityResources.get(key) === resource) activityResources.delete(key);
+};
+
 const getActivityResource = (
   mode: ActivityMode,
   years: string[] | null
 ): SuspenseResource<Activity[]> => {
-  const key = years ? `${mode}:${years.join(',')}` : `${mode}:metadata`;
+  const key = activityResourceKey(mode, years);
   let resource = activityResources.get(key);
   if (!resource) {
     resource = createResource(() =>
@@ -158,13 +176,31 @@ export const preloadActivitiesWithRoutes = (
   years: string[]
 ): Promise<void> => getActivityResource(mode, years).preload();
 
+/**
+ * Warms a mode's data before the user commits to it.
+ *
+ * The resource cache keeps a rejection for the lifetime of the page, so a
+ * speculative preload must clear its own failures: otherwise a hover that
+ * timed out would make the later click fail too, on a connection that has
+ * since recovered. Reading a rejected resource throws, so this never calls
+ * read() without checking first, and it resolves even when the warm-up fails.
+ */
 export const preloadActivityMode = async (
   mode: ActivityMode
 ): Promise<void> => {
   const metadataResource = getActivityResource(mode, null);
   await metadataResource.preload();
+  if (metadataResource.rejected()) {
+    forgetActivityResource(mode, null, metadataResource);
+    return;
+  }
+
   const years = getProcessedActivities(metadataResource.read()).years;
-  await getActivityResource(mode, years).preload();
+  const routesResource = getActivityResource(mode, years);
+  await routesResource.preload();
+  if (routesResource.rejected()) {
+    forgetActivityResource(mode, years, routesResource);
+  }
 };
 
 export const loadActivitiesWithRoutes = async (

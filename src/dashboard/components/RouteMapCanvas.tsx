@@ -7,6 +7,10 @@ import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
 import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
 import { transformCartoRequest } from '@/components/RunMap/mapRequest';
+import {
+  createBasemapStatusTracker,
+  type MapRuntimeErrorLike,
+} from '../utils/mapRuntime';
 import './RouteMap.css';
 
 // MapLibre v6 needs an explicit Vite-emitted worker URL in production builds.
@@ -220,38 +224,17 @@ export function RouteMapCanvas({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    let failed = false;
-    let resourceErrorCount = 0;
+    const tracker = createBasemapStatusTracker();
     const onError = (event: maplibregl.ErrorEvent) => {
-      const error = event.error as Error & {
-        name?: string;
-        status?: number;
-        url?: string;
-      };
-      const details = [error.name, error.message, error.url]
-        .filter(Boolean)
-        .join(' ');
-
-      // MapLibre routinely aborts obsolete tile/glyph requests while fitting
-      // bounds or replacing a style. Those cancellations are not map failures.
-      if (/\b(?:abort(?:ed)?|cancel(?:led|ed)?)\b/i.test(details)) return;
-
-      // Once the style is usable, tolerate a small number of transient
-      // resource failures. If the provider is actually unreachable, the
-      // repeated failures still surface the retry UI.
-      if (styleReadyRef.current) {
-        resourceErrorCount += 1;
-        if (resourceErrorCount < 12) return;
-      }
-
-      failed = true;
-      setStatus('error');
+      const next = tracker.error(
+        event.error as MapRuntimeErrorLike,
+        styleReadyRef.current
+      );
+      if (next) setStatus(next);
     };
     const onIdle = () => {
-      if (!styleReadyRef.current) return;
-      failed = false;
-      resourceErrorCount = 0;
-      setStatus('ready');
+      const next = tracker.idle(styleReadyRef.current);
+      if (next) setStatus(next);
     };
     const onLoading = () => setStatus('loading');
     map.on('error', onError);
