@@ -61,8 +61,16 @@ const createResource = <Result>(
   };
 };
 
+/**
+ * Loading is order- and duplicate-independent: activityData dedupes the years
+ * and derives the result from metadata order. So the same set of years is the
+ * same request, and normalising here stops two call sites that happen to build
+ * their year list differently from each downloading their own copy.
+ */
 const activityResourceKey = (mode: ActivityMode, years: string[] | null) =>
-  years ? `${mode}:${years.join(',')}` : `${mode}:metadata`;
+  years
+    ? `${mode}:${[...new Set(years)].sort().join(',')}`
+    : `${mode}:metadata`;
 
 /**
  * Drops a cached resource, but only if it is still the one that failed. A
@@ -136,18 +144,17 @@ const processActivities = (activityData: Activity[]): ProcessedActivities => {
   };
 };
 
-let processedActivitiesCache: {
-  activityData: Activity[];
-  processedActivities: ProcessedActivities;
-} | null = null;
+// Keyed by dataset identity, as before, but holding more than one entry: a
+// single slot meant warming another mode evicted the mode on screen, and the
+// next render reprocessed every one of its activities.
+let processedActivitiesCache = new WeakMap<Activity[], ProcessedActivities>();
 
 const getProcessedActivities = (activityData: Activity[]) => {
-  if (processedActivitiesCache?.activityData === activityData) {
-    return processedActivitiesCache.processedActivities;
-  }
+  const cached = processedActivitiesCache.get(activityData);
+  if (cached) return cached;
 
   const processedActivities = processActivities(activityData);
-  processedActivitiesCache = { activityData, processedActivities };
+  processedActivitiesCache.set(activityData, processedActivities);
   return processedActivities;
 };
 
@@ -214,7 +221,7 @@ export const loadActivitiesWithRoutes = async (
 
 export const resetActivityData = () => {
   activityResources.clear();
-  processedActivitiesCache = null;
+  processedActivitiesCache = new WeakMap();
   activityDataRepository.clear();
 };
 

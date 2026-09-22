@@ -343,7 +343,9 @@ export function RouteMapCanvas({
           </div>
         )}
       </div>
-      <div className="route-map-footer">
+      {/* Exposed so the deployment probe can see a failed basemap: every
+          gate so far stopped at the DOM and read a blank map as healthy. */}
+      <div className="route-map-footer" data-basemap-status={status}>
         <span role="status" aria-live="polite">
           {status === 'error'
             ? zh

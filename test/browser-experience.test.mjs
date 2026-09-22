@@ -210,13 +210,25 @@ const createBrowserPage = async (width, { forceNoWebGL = false } = {}) => {
 
   // The map layout itself is under test, while third-party map resources are
   // replaced with deterministic fixtures so CI never depends on map-provider uptime.
+  // Pinned to the exact style URLs the app ships. A `styles/**` glob answered
+  // 200 for any slug, so a retired or misspelled style stayed green in CI and
+  // only failed in production. Playwright matches the most recently registered
+  // route first, so the catch-all goes down before the URLs that must work.
   await context.route('https://tiles.openfreemap.org/styles/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: OPENFREEMAP_TEST_STYLE,
-    })
+    route.fulfill({ status: 404, body: 'unexpected style slug' })
   );
+  for (const styleUrl of [
+    'https://tiles.openfreemap.org/styles/positron',
+    'https://tiles.openfreemap.org/styles/dark',
+  ]) {
+    await context.route(styleUrl, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: OPENFREEMAP_TEST_STYLE,
+      })
+    );
+  }
   await context.route('https://tiles.openfreemap.org/test/**', (route) =>
     route.fulfill({
       status: 200,
@@ -870,6 +882,46 @@ test(
         1,
         'Hiking switch is missing from the dashboard header'
       );
+      session.assertNoRuntimeErrors();
+    } finally {
+      await session.context.close();
+    }
+  }
+);
+
+test(
+  'a second mode click wins even when the first one resolves later',
+  { timeout: 90_000 },
+  async () => {
+    const session = await createBrowserPage(1280);
+    try {
+      // Make the abandoned mode the slow one, so its deferred navigation is
+      // guaranteed to land after the mode the user actually chose.
+      await session.context.route(
+        '**/data/cycling/routes/**',
+        async (route) => {
+          await new Promise((resolve) => setTimeout(resolve, 2_000));
+          await route.continue();
+        }
+      );
+
+      await openActivityPage(session.page, 'running');
+      const modeSwitcher = session.page.getByRole('navigation', {
+        name: '运动类型切换',
+      });
+
+      await modeSwitcher.getByRole('link', { name: '骑行' }).click();
+      await modeSwitcher.getByRole('link', { name: '徒步' }).click();
+      await session.page.waitForURL((url) => url.pathname === '/hiking');
+
+      // Give the abandoned cycling preload time to finish and try to navigate.
+      await session.page.waitForTimeout(4_000);
+      assert.equal(
+        new URL(session.page.url()).pathname,
+        '/hiking',
+        'a slower earlier click navigated on top of the mode the user chose'
+      );
+
       session.assertNoRuntimeErrors();
     } finally {
       await session.context.close();

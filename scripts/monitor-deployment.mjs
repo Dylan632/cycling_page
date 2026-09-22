@@ -358,6 +358,12 @@ export const validateBrowserProbe = ({
   if (state.mapRenderer !== 'maplibre') {
     throw new Error(`${mode} browser did not render the interactive map`);
   }
+  // data-map-renderer is a static attribute: it proves the component mounted,
+  // never that a basemap reached the screen. Only an explicit failure fails
+  // the probe, so a map still loading when we sample is not held against it.
+  if (state.basemapStatus === 'error') {
+    throw new Error(`${mode} browser reported a failed basemap`);
+  }
 
   const actionablePageErrors = pageErrors.filter(
     (message) => !isAllowedBrowserNoise(message)
@@ -468,6 +474,7 @@ const browserStateExpression = (mode) => `(() => {
   const root = document.querySelector('#root');
   const mapContainer = document.querySelector('#map-container');
   const renderer = document.querySelector('#map-container [data-map-renderer]');
+  const basemap = document.querySelector('#map-container [data-basemap-status]');
   if (markerMode === expectedMode && !renderer && mapContainer) {
     mapContainer.scrollIntoView({ block: 'center' });
   }
@@ -481,7 +488,8 @@ const browserStateExpression = (mode) => `(() => {
         ? window.location.pathname
         : null,
     hasFatalUi: document.body.textContent.includes('运动记录暂时无法加载'),
-    mapRenderer: renderer && renderer.getAttribute('data-map-renderer')
+    mapRenderer: renderer && renderer.getAttribute('data-map-renderer'),
+    basemapStatus: basemap && basemap.getAttribute('data-basemap-status')
   };
 })()`;
 
