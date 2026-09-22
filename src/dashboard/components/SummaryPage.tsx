@@ -207,7 +207,6 @@ export function SummaryPage({
   onSelectActivity: (a: Activity) => void;
 }) {
   const { locale } = useLocale();
-  const { mode } = useActivityMode();
   const zh = locale === 'zh';
   const [period, setPeriod] = useState<SummaryPeriod>('month');
   const [year, setYear] = useState('all');
