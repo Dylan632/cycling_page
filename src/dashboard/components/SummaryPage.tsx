@@ -11,10 +11,7 @@ import {
 import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
 import { useActivityMode } from '@/modules/activity/ActivityModeProvider';
-import {
-  formatActivityPerformance,
-  getActivityTypeLabel,
-} from '../utils/activityPresentation';
+import { formatActivityPerformance } from '../utils/activityPresentation';
 import {
   groupSummary,
   summaryKey,
@@ -213,13 +210,8 @@ export function SummaryPage({
   const { mode } = useActivityMode();
   const zh = locale === 'zh';
   const [period, setPeriod] = useState<SummaryPeriod>('month');
-  const [sport, setSport] = useState('all');
   const [year, setYear] = useState('all');
   const [limit, setLimit] = useState(12);
-  const sports = useMemo(
-    () => [...new Set(activities.map((a) => a.type))].sort(),
-    [activities]
-  );
   const years = useMemo(
     () =>
       [...new Set(activities.map((a) => a.start_date_local.slice(0, 4)))]
@@ -231,13 +223,11 @@ export function SummaryPage({
     () =>
       groupSummary(
         activities.filter(
-          (a) =>
-            (sport === 'all' || a.type === sport) &&
-            (year === 'all' || summaryKeyYear(a, period) === year)
+          (a) => year === 'all' || summaryKeyYear(a, period) === year
         ),
         period
       ),
-    [activities, sport, year, period]
+    [activities, year, period]
   );
   const periods: [SummaryPeriod, string][] = [
     ['year', zh ? '年' : 'Year'],
@@ -258,25 +248,6 @@ export function SummaryPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <label className="text-xs text-[var(--color-muted)]">
-            {zh ? '运动类型' : 'Sport'}
-            <select
-              aria-label={zh ? '运动类型' : 'Sport'}
-              className={`${control} ml-2`}
-              value={sport}
-              onChange={(e) => {
-                setSport(e.target.value);
-                setLimit(12);
-              }}
-            >
-              <option value="all">{zh ? '全部运动' : 'All sports'}</option>
-              {sports.map((s) => (
-                <option key={s} value={s}>
-                  {getActivityTypeLabel(mode, s, locale)}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="text-xs text-[var(--color-muted)]">
             {zh ? '年份' : 'Year'}
             <select
