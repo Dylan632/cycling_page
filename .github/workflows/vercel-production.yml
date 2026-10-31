@@ -7,6 +7,11 @@ on:
         description: Exact 40-character master SHA to deploy
         required: true
         type: string
+      ci_preverified:
+        description: The calling workflow already ran release CI on this exact SHA
+        required: false
+        type: boolean
+        default: false
     secrets:
       VERCEL_TOKEN:
         required: true
@@ -86,7 +91,7 @@ jobs:
           fi
 
       - name: Verify successful CI for manual deployments
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.ci_preverified != true
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -111,7 +116,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Re-run complete delivery checks for manual deployments
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.ci_preverified != true
         shell: bash
         run: |
           set -euo pipefail

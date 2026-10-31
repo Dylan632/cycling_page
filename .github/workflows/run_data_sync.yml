@@ -323,4 +323,8 @@ jobs:
     uses: ./.github/workflows/vercel-production.yml
     with:
       source_sha: ${{ needs.sync.outputs.source_sha }}
+      # The release ci job above already verified this exact SHA, so the
+      # deploy lane must not demand a separate CI run that can never exist for
+      # a SHA this workflow just created (the manual-dispatch trap).
+      ci_preverified: true
     secrets: inherit
