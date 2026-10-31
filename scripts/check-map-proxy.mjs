@@ -39,17 +39,78 @@ if (!styleContentType.toLowerCase().includes('application/json')) {
 }
 
 const style = JSON.parse(styleBody);
-if (
-  style?.version !== 8 ||
-  typeof style?.sources?.carto?.url !== 'string' ||
-  !style.sources.carto.url.includes('carto.streets')
-) {
+
+// Carto serves the same basemap style in more than one source shape: older
+// documents point at a TileJSON URL (sources.<name>.url), newer ones inline the
+// tile template (sources.<name>.tiles). Accept either, but prove the source
+// really is Carto streets data behind a host the proxy is allowed to fetch.
+const proxiedHostnames = new Set([
+  'basemaps.cartocdn.com',
+  'tiles.basemaps.cartocdn.com',
+  'tiles-a.basemaps.cartocdn.com',
+  'tiles-b.basemaps.cartocdn.com',
+  'tiles-c.basemaps.cartocdn.com',
+  'tiles-d.basemaps.cartocdn.com',
+  'a.basemaps.cartocdn.com',
+  'b.basemaps.cartocdn.com',
+  'c.basemaps.cartocdn.com',
+  'd.basemaps.cartocdn.com',
+]);
+
+const isProxiedCartoStreetsUrl = (value) => {
+  if (typeof value !== 'string') return false;
+  if (!value.includes('carto.streets')) return false;
+  try {
+    return proxiedHostnames.has(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
+
+const cartoSourceUrls = Object.values(style?.sources ?? {}).flatMap(
+  (source) => [
+    ...(typeof source?.url === 'string' ? [source.url] : []),
+    ...(Array.isArray(source?.tiles)
+      ? source.tiles.filter((tile) => typeof tile === 'string')
+      : []),
+  ]
+);
+
+if (style?.version !== 8 || !cartoSourceUrls.some(isProxiedCartoStreetsUrl)) {
   throw new Error('map proxy returned an unexpected Carto style document');
 }
 
-// The dashboard basemap is raster, so probe a real tile too: a wrong tile host
-// answers 404 for every tile and leaves the map blank while the style check
-// still passes.
+// The style's own tile template is the URL the map really requests, so probe it
+// too: a wrong tile host answers 404 for every tile and leaves the map blank
+// while the style check still passes.
+const vectorTileTemplate = cartoSourceUrls.find(
+  (url) => isProxiedCartoStreetsUrl(url) && url.includes('{z}')
+);
+if (vectorTileTemplate) {
+  const vectorTileUrl = vectorTileTemplate
+    .replace('{z}', '10')
+    .replace('{x}', '857')
+    .replace('{y}', '418');
+  if (!vectorTileUrl.includes('{')) {
+    const { response: vectorResponse, contentType: vectorContentType } =
+      await fetchThroughProxy(vectorTileUrl);
+    const vectorBody = Buffer.from(await vectorResponse.arrayBuffer());
+    if (!vectorResponse.ok) {
+      throw new Error(
+        `map proxy returned HTTP ${vectorResponse.status} for the basemap vector tile ${vectorTileUrl}`
+      );
+    }
+    if (vectorBody.length === 0) {
+      throw new Error(`map proxy returned an empty basemap vector tile`);
+    }
+    process.stdout.write(
+      `map proxy passed: vector tile HTTP ${vectorResponse.status}, ${vectorContentType}, ${vectorBody.length} bytes\n`
+    );
+  }
+}
+
+// Raster basemap tiles stay on the proxy allowlist, so keep probing them: a
+// wrong raster host answers 404 for every tile while the style check passes.
 for (const theme of ['dark_all', 'light_all']) {
   const tileUrl = `https://a.basemaps.cartocdn.com/${theme}/10/857/418.png`;
   const { response: tileResponse, contentType: tileContentType } =
