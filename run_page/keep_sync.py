@@ -63,6 +63,8 @@ LOGIN_API = "https://api.gotokeep.com/v1.1/users/login"
 RUN_DATA_API = "https://api.gotokeep.com/pd/v3/stats/detail?dateUnit=all&type={sport_type}&lastDate={last_date}"
 RUN_LOG_API = "https://api.gotokeep.com/pd/v3/{sport_type}log/{run_id}"
 
+KEEP_LIST_PAGE_DELAY_SECONDS = 0.3  # Pause between paginated list requests
+
 HR_FRAME_THRESHOLD_IN_DECISECOND = 100  # Maximum time difference to consider a data point as the nearest, the unit is decisecond(分秒)
 
 TIMESTAMP_THRESHOLD_IN_DECISECOND = 3_600_000  # Threshold for target timestamp adjustment, the unit of timestamp is decisecond(分秒), so the 3_600_000 stands for 100 hours sports time. 100h = 100 * 60 * 60 * 10
@@ -145,7 +147,9 @@ def get_to_download_runs_ids(session, headers, sport_type, min_distance=0):
             break
         since_time = datetime.fromtimestamp(last_date // 1000, tz=timezone.utc)
         print(f"pares keep ids data since {since_time}", flush=True)
-        time.sleep(1)  # spider rule
+        # Spider rule: keep a pause between list pages, but a full second per
+        # page adds up to half a minute across the three sport types.
+        time.sleep(KEEP_LIST_PAGE_DELAY_SECONDS)
     return result
 
 
