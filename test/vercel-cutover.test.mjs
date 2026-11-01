@@ -231,6 +231,16 @@ test('production workflow deploys an exact SHA after the parent CI workflow succ
     workflow,
     /publish-legacy-redirect:[\s\S]*?needs\.deploy\.outputs\.superseded != 'true'/
   );
+  // Only the code-push lane opts in, so a manual dispatch and the publication
+  // lane keep refusing a stale SHA outright.
+  assert.match(
+    workflow,
+    /supersede_on_newer_master:\n\s{8}description:[\s\S]*?default: false/
+  );
+  assert.match(
+    await readFile('.github/workflows/vercel-code-release.yml', 'utf8'),
+    /supersede_on_newer_master: true/
+  );
 });
 
 test('production workflow has no independent scheduled release trigger', async () => {

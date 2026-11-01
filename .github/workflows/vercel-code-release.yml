@@ -21,4 +21,7 @@ jobs:
     uses: ./.github/workflows/vercel-production.yml
     with:
       source_sha: ${{ github.event.workflow_run.head_sha }}
+      # A push that also starts the publication pipeline can be superseded by
+      # that pipeline's newer commit; then production belongs to that commit.
+      supersede_on_newer_master: true
     secrets: inherit

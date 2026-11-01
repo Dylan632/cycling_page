@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      supersede_on_newer_master:
+        description: A newer master commit owns production instead of this SHA
+        required: false
+        type: boolean
+        default: false
     secrets:
       VERCEL_TOKEN:
         required: true
@@ -220,7 +225,7 @@ jobs:
       # browser probes.
       - name: Stop when a newer master commit already supersedes this SHA
         id: supersede
-        if: github.event_name == 'workflow_call' && inputs.ci_preverified != true
+        if: inputs.supersede_on_newer_master
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -255,7 +260,7 @@ jobs:
           BROWSER_BIN: google-chrome
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          SUPERSEDE_LANE: ${{ github.event_name == 'workflow_call' && inputs.ci_preverified != true }}
+          SUPERSEDE_LANE: ${{ inputs.supersede_on_newer_master }}
         shell: bash
         run: |
           set -euo pipefail
