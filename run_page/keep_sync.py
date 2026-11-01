@@ -63,7 +63,10 @@ LOGIN_API = "https://api.gotokeep.com/v1.1/users/login"
 RUN_DATA_API = "https://api.gotokeep.com/pd/v3/stats/detail?dateUnit=all&type={sport_type}&lastDate={last_date}"
 RUN_LOG_API = "https://api.gotokeep.com/pd/v3/{sport_type}log/{run_id}"
 
-KEEP_LIST_PAGE_DELAY_SECONDS = 0.3  # Pause between paginated list requests
+# Pause between paginated list requests. Record bodies are fetched in parallel,
+# so these pauses are the only serial part of a sync: a second per page cost
+# ~30s per sport type, while 0.3s still keeps the list requests polite.
+KEEP_LIST_PAGE_DELAY_SECONDS = 0.3
 
 HR_FRAME_THRESHOLD_IN_DECISECOND = 100  # Maximum time difference to consider a data point as the nearest, the unit is decisecond(分秒)
 
