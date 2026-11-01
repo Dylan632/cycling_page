@@ -13,7 +13,9 @@ RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
 # Keep answers one record per request, so a full history sync is dominated by
 # round-trip latency rather than CPU. A handful of parallel readers keeps the
-# daily publication inside its schedule without hammering the API.
+# daily publication inside its schedule without hammering the API; parsing stays
+# on the caller's thread and starts as each answer arrives, so the decode of one
+# record overlaps the requests still in flight for the rest of the batch.
 KEEP_RECORD_WORKERS = 8
 
 
