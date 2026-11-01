@@ -44,33 +44,39 @@ def collect_keep_records(
 
     Records are fetched concurrently when ``max_workers`` exceeds one, but they
     are always parsed and returned in the caller's order so the published
-    snapshot stays byte-identical to a sequential run. The first record that
-    fails (in that same order) aborts the whole batch.
+    snapshot stays byte-identical to a sequential run. Parsing a record starts
+    as soon as it arrives, so CPU work overlaps the requests still in flight.
+    The first record that fails (in that same order) aborts the whole batch.
     """
     ids = list(record_ids)
-    loaded: list[tuple[RawRecord | None, Exception | None]] = []
 
     if max_workers > 1 and len(ids) > 1:
         with ThreadPoolExecutor(max_workers=min(max_workers, len(ids))) as pool:
-            pending = [
-                (record_id, pool.submit(load_record, record_id)) for record_id in ids
-            ]
-            for _, future in pending:
+            pending = [pool.submit(load_record, record_id) for record_id in ids]
+            parsed_records: list[ParsedRecord | None] = []
+            failures: list[tuple[str, Exception]] = []
+            for record_id, future in zip(ids, pending):
                 try:
-                    loaded.append((future.result(), None))
+                    raw = future.result()
+                    parsed = parse_record(raw)
+                    if parsed is None:
+                        raise ValueError("parser returned no activity")
                 except Exception as error:  # noqa: BLE001 - re-raised with context
-                    loaded.append((None, error))
-    else:
-        for record_id in ids:
-            try:
-                loaded.append((load_record(record_id), None))
-            except Exception as error:  # noqa: BLE001 - re-raised with context
-                loaded.append((None, error))
+                    failures.append((record_id, error))
+                    parsed_records.append(None)
+                    continue
+                parsed_records.append(parsed)
+        if failures:
+            failed_id, error = failures[0]
+            raise KeepRecordError(failed_id, error) from error
+        return [record for record in parsed_records if record is not None]
 
     records: list[ParsedRecord] = []
-    for record_id, (raw, load_error) in zip(ids, loaded):
-        if load_error is not None:
-            raise KeepRecordError(record_id, load_error) from load_error
+    for record_id in ids:
+        try:
+            raw = load_record(record_id)
+        except Exception as error:  # noqa: BLE001 - re-raised with context
+            raise KeepRecordError(record_id, error) from error
         try:
             parsed = parse_record(raw)
             if parsed is None:
