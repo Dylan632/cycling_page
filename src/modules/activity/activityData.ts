@@ -40,7 +40,12 @@ interface ActivityDataRepositoryOptions {
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const YEAR_PATTERN = /^\d{4}$/;
-const DEFAULT_REQUEST_TIMEOUT_MS = 1_800;
+// A whole year of routes is a 300-400 kB body, and the first request to a
+// freshly promoted deployment is answered by a cold edge: measured time to
+// first byte reaches 1-3 s there, which a 1.8 s budget killed mid-archive and
+// turned into the "archive unavailable" screen for anyone on a slow link.
+// Every request still fails closed, just on a budget a real connection meets.
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 const configuredRequestTimeoutMs = Number(
   import.meta.env.VITE_ACTIVITY_DATA_REQUEST_TIMEOUT_MS
@@ -208,7 +213,7 @@ const sha256 = async (content: string) => {
 export const createActivityDataRepository = ({
   baseUrl,
   fetcher = fetch,
-  requestTimeoutMs = 1_800,
+  requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
 }: ActivityDataRepositoryOptions) => {
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
   const requestCache = new Map<string, Promise<unknown>>();
