@@ -211,6 +211,26 @@ test('production workflow deploys an exact SHA after the parent CI workflow succ
     workflow,
     /\/running, \/cycling, and \/hiking passed HTTP, data freshness, cache, and browser error probes/
   );
+  // A code push that the publication pipeline has already superseded stops
+  // cleanly before the staged probes instead of failing after promoting
+  // nothing, and it never republishes the legacy redirect for a 404ed SHA.
+  assert.match(
+    workflow,
+    /Stop when a newer master commit already supersedes this SHA[\s\S]*?check-master-superseded\.mjs/
+  );
+  assert.ok(
+    workflow.indexOf(
+      'Stop when a newer master commit already supersedes this SHA'
+    ) < workflow.indexOf('Monitor the staged production artifact')
+  );
+  assert.match(
+    workflow,
+    /- name: Promote, verify canonical identity, or roll back\n\s+if: steps\.supersede\.outputs\.superseded != 'true'/
+  );
+  assert.match(
+    workflow,
+    /publish-legacy-redirect:[\s\S]*?needs\.deploy\.outputs\.superseded != 'true'/
+  );
 });
 
 test('production workflow has no independent scheduled release trigger', async () => {

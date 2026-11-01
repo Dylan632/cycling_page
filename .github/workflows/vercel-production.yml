@@ -39,6 +39,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      # "true" when a newer master commit already owns production, so the
+      # legacy redirect must not be republished for a SHA that never shipped.
+      superseded: ${{ steps.supersede.outputs.superseded }}
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
@@ -208,7 +212,27 @@ jobs:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node scripts/check-map-proxy.mjs "${{ steps.deploy.outputs.url }}"
 
+      # A code push and the publication pipeline race for the same Vercel
+      # project: when the publication publishes a newer commit while this build
+      # is still staging, this SHA can never be promoted and the newer commit's
+      # own lane owns production. Deciding here also releases the
+      # `vercel-production` lock minutes earlier instead of after the staged
+      # browser probes.
+      - name: Stop when a newer master commit already supersedes this SHA
+        id: supersede
+        if: github.event_name == 'workflow_call' && inputs.ci_preverified != true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-master-superseded.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$SOURCE_SHA" \
+            --branch master
+
       - name: Monitor the staged production artifact
+        if: steps.supersede.outputs.superseded != 'true'
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
           BROWSER_BIN: google-chrome
@@ -226,10 +250,12 @@ jobs:
             tee "$RUNNER_TEMP/vercel-cutover/staged-monitor.log"
 
       - name: Promote, verify canonical identity, or roll back
+        if: steps.supersede.outputs.superseded != 'true'
         env:
           BROWSER_BIN: google-chrome
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SUPERSEDE_LANE: ${{ github.event_name == 'workflow_call' && inputs.ci_preverified != true }}
         shell: bash
         run: |
           set -euo pipefail
@@ -237,6 +263,25 @@ jobs:
             git ls-remote origin refs/heads/master | awk '{print $1}'
           )"
           if [ "$pre_promotion_master_sha" != "$SOURCE_SHA" ]; then
+            # The newer commit owns production, so a code push that lost the
+            # race stops cleanly instead of reporting a failure. Nothing was
+            # promoted yet, so the rollback trap must not fire.
+            if [ "$SUPERSEDE_LANE" = true ]; then
+              supersede_status=0
+              node scripts/check-master-superseded.mjs \
+                --repository "$GITHUB_REPOSITORY" \
+                --sha "$SOURCE_SHA" \
+                --branch master \
+                --require-current || supersede_status=$?
+              if [ "$supersede_status" -eq 3 ]; then
+                echo "::notice::master advanced to $pre_promotion_master_sha; the newer commit's own deployment lane owns production, so $SOURCE_SHA is not promoted."
+                exit 0
+              fi
+              if [ "$supersede_status" -ne 0 ]; then
+                echo "::error::Unable to prove whether master advanced past $SOURCE_SHA."
+                exit 1
+              fi
+            fi
             echo "::error::master advanced to $pre_promotion_master_sha before promotion; refusing stale SHA $SOURCE_SHA."
             exit 1
           fi
@@ -329,6 +374,16 @@ jobs:
         if: success()
         shell: bash
         run: |
+          if [ "${{ steps.supersede.outputs.superseded }}" = true ]; then
+            {
+              echo "## Superseded by a newer master commit"
+              echo
+              echo "- Superseded SHA: \`$SOURCE_SHA\`"
+              echo "- Current master: \`${{ steps.supersede.outputs.head_sha }}\`"
+              echo "- Nothing was promoted; the newer commit's own lane deploys production."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           {
             echo "## Verified Vercel production"
             echo
@@ -341,7 +396,7 @@ jobs:
 
   publish-legacy-redirect:
     needs: deploy
-    if: needs.deploy.result == 'success'
+    if: needs.deploy.result == 'success' && needs.deploy.outputs.superseded != 'true'
     permissions:
       actions: read
       contents: read
