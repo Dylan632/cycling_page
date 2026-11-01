@@ -896,11 +896,13 @@ test(
     const session = await createBrowserPage(1280);
     try {
       // Make the abandoned mode the slow one, so its deferred navigation is
-      // guaranteed to land after the mode the user actually chose.
+      // guaranteed to land after the mode the user actually chose. The delay is
+      // a timer in the route handler, not a machine-speed race, so a short one
+      // proves the same ordering.
       await session.context.route(
         '**/data/cycling/routes/**',
         async (route) => {
-          await new Promise((resolve) => setTimeout(resolve, 2_000));
+          await new Promise((resolve) => setTimeout(resolve, 750));
           await route.continue();
         }
       );
@@ -915,7 +917,7 @@ test(
       await session.page.waitForURL((url) => url.pathname === '/hiking');
 
       // Give the abandoned cycling preload time to finish and try to navigate.
-      await session.page.waitForTimeout(4_000);
+      await session.page.waitForTimeout(2_000);
       assert.equal(
         new URL(session.page.url()).pathname,
         '/hiking',

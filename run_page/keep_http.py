@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, TypeVar
 
 KEEP_REQUEST_TIMEOUT = (5.0, 30.0)
 KEEP_REQUEST_ATTEMPTS = 3
 RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+
+# Keep answers one record per request, so a full history sync is dominated by
+# round-trip latency rather than CPU. A handful of parallel readers keeps the
+# daily publication inside its schedule without hammering the API.
+KEEP_RECORD_WORKERS = 8
 
 
 class KeepRequestError(RuntimeError):
@@ -31,12 +37,42 @@ def collect_keep_records(
     record_ids: Iterable[str],
     load_record: Callable[[str], RawRecord],
     parse_record: Callable[[RawRecord], ParsedRecord | None],
+    *,
+    max_workers: int = 1,
 ) -> list[ParsedRecord]:
-    """Load a complete Keep batch, failing instead of returning partial data."""
+    """Load a complete Keep batch, failing instead of returning partial data.
+
+    Records are fetched concurrently when ``max_workers`` exceeds one, but they
+    are always parsed and returned in the caller's order so the published
+    snapshot stays byte-identical to a sequential run. The first record that
+    fails (in that same order) aborts the whole batch.
+    """
+    ids = list(record_ids)
+    loaded: list[tuple[RawRecord | None, Exception | None]] = []
+
+    if max_workers > 1 and len(ids) > 1:
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(ids))) as pool:
+            pending = [
+                (record_id, pool.submit(load_record, record_id)) for record_id in ids
+            ]
+            for _, future in pending:
+                try:
+                    loaded.append((future.result(), None))
+                except Exception as error:  # noqa: BLE001 - re-raised with context
+                    loaded.append((None, error))
+    else:
+        for record_id in ids:
+            try:
+                loaded.append((load_record(record_id), None))
+            except Exception as error:  # noqa: BLE001 - re-raised with context
+                loaded.append((None, error))
+
     records: list[ParsedRecord] = []
-    for record_id in record_ids:
+    for record_id, (raw, load_error) in zip(ids, loaded):
+        if load_error is not None:
+            raise KeepRecordError(record_id, load_error) from load_error
         try:
-            parsed = parse_record(load_record(record_id))
+            parsed = parse_record(raw)
             if parsed is None:
                 raise ValueError("parser returned no activity")
         except Exception as error:

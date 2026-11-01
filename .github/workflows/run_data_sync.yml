@@ -61,11 +61,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements.txt
+
+      - name: Set up uv with its built-in cache
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements.txt
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: uv pip install --system -r requirements.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v6

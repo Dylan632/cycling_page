@@ -1,7 +1,9 @@
 import argparse
 import base64
+import bisect
 import json
 import os
+import threading
 import time
 import zlib
 from collections import namedtuple
@@ -23,11 +25,17 @@ from config import (
 from Crypto.Cipher import AES
 from generator import Generator
 from activity_snapshot import atomic_write
-from keep_http import KeepRequestError, collect_keep_records, request_json
+from keep_http import (
+    KEEP_RECORD_WORKERS,
+    KeepRequestError,
+    collect_keep_records,
+    request_json,
+)
 from utils import adjust_time
 import xml.etree.ElementTree as ET
 
 KEEP_SPORT_TYPES = ["running", "hiking", "cycling"]
+GPXTPX_NAMESPACE = "http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
 KEEP_SYNC_DATA_TYPES = {
     "running": {"outdoorRunning"},
     "hiking": {"mountaineering"},
@@ -133,11 +141,11 @@ def get_to_download_runs_ids(session, headers, sport_type, min_distance=0):
                 and matches_sync_data_type(record, sport_type)
             )
         last_date = next_last_date
-        since_time = datetime.fromtimestamp(last_date // 1000, tz=timezone.utc)
-        print(f"pares keep ids data since {since_time}")
-        time.sleep(1)  # spider rule
         if not last_date:
             break
+        since_time = datetime.fromtimestamp(last_date // 1000, tz=timezone.utc)
+        print(f"pares keep ids data since {since_time}", flush=True)
+        time.sleep(1)  # spider rule
     return result
 
 
@@ -196,13 +204,16 @@ def parse_raw_data_to_nametuple(
                 p["latitude"] = run_points_data[i][0]
                 p["longitude"] = run_points_data[i][1]
 
+        hr_index = build_hr_index(decoded_hr_data)
         for p in run_points_data_gpx:
             if "timestamp" not in p:
                 if "unixTimestamp" in p:
                     p["timestamp"] = p["unixTimestamp"]
                 else:
                     p["timestamp"] = 0
-            p_hr = find_nearest_hr(decoded_hr_data, int(p["timestamp"]), start_time)
+            p_hr = find_nearest_hr(
+                decoded_hr_data, int(p["timestamp"]), start_time, index=hr_index
+            )
             if p_hr:
                 p["hr"] = p_hr
 
@@ -295,16 +306,37 @@ def get_all_keep_tracks(
                 i.split(".")[0] for i in old_tcx_ids if not i.startswith(".")
             ]
 
+        # One session per reader thread keeps connection pooling effective while
+        # avoiding shared mutable client state across workers.
+        sessions = threading.local()
+
         def load_run(run_id):
-            print(f"parsing keep id {run_id}")
-            return get_single_run_data(s, headers, run_id, api)
+            session = getattr(sessions, "session", None)
+            if session is None:
+                session = requests.Session()
+                sessions.session = session
+            return get_single_run_data(session, headers, run_id, api)
+
+        parsed_count = 0
 
         def parse_run(run_data):
-            return parse_raw_data_to_nametuple(
+            nonlocal parsed_count
+            parsed = parse_raw_data_to_nametuple(
                 run_data, old_gpx_ids, old_tcx_ids, with_gpx, with_tcx
             )
+            parsed_count += 1
+            if parsed_count % 25 == 0:
+                print(
+                    f"parsed {parsed_count}/{len(runs)} keep {api} records",
+                    flush=True,
+                )
+            return parsed
 
-        tracks.extend(collect_keep_records(runs, load_run, parse_run))
+        tracks.extend(
+            collect_keep_records(
+                runs, load_run, parse_run, max_workers=KEEP_RECORD_WORKERS
+            )
+        )
     return tracks
 
 
@@ -360,13 +392,13 @@ def parse_points_to_gpx(run_points_data, start_time, sport_type):
             elevation=p.get("elevation"),
         )
         if p.get("hr") is not None:
-            gpx_extension_hr = ET.fromstring(
-                f"""<gpxtpx:TrackPointExtension xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
-                    <gpxtpx:hr>{p["hr"]}</gpxtpx:hr>
-                    </gpxtpx:TrackPointExtension>
-                    """
-            )
-            point.extensions.append(gpx_extension_hr)
+            # Built directly instead of parsing a template per point: a long
+            # track has thousands of points and the XML round-trip dominated
+            # GPX generation.
+            extension = ET.Element(f"{{{GPXTPX_NAMESPACE}}}TrackPointExtension")
+            heart_rate = ET.SubElement(extension, f"{{{GPXTPX_NAMESPACE}}}hr")
+            heart_rate.text = str(p["hr"])
+            point.extensions.append(extension)
         gpx_segment.points.append(point)
     return gpx
 
@@ -474,8 +506,28 @@ def parse_points_to_tcx(run_data, run_points_data, sport_type):
     return xml_str
 
 
+def build_hr_index(hr_data_list):
+    """Sort the heart-rate samples once so each GPS point can be looked up in O(log n).
+
+    A long ride carries thousands of GPS points and thousands of heart-rate
+    samples; scanning every sample for every point (the original behaviour) is
+    quadratic and dominated the whole daily sync.
+    """
+    entries = [
+        (item["timestamp"], position, item)
+        for position, item in enumerate(hr_data_list)
+        if item.get("timestamp")
+    ]
+    entries.sort(key=lambda entry: (entry[0], entry[1]))
+    return [entry[0] for entry in entries], entries
+
+
 def find_nearest_hr(
-    hr_data_list, target_time, start_time, threshold=HR_FRAME_THRESHOLD_IN_DECISECOND
+    hr_data_list,
+    target_time,
+    start_time,
+    threshold=HR_FRAME_THRESHOLD_IN_DECISECOND,
+    index=None,
 ):
     """
     Find the nearest heart rate data point to the target time.
@@ -489,28 +541,38 @@ def find_nearest_hr(
         start_time (float): The reference start time. the unit of start_time is normal millisecond timestamp
         threshold (float, optional): The maximum allowed time difference to consider a data point as the nearest.
             Default is HR_THRESHOLD, the unit is decisecond(分秒)
+        index (tuple, optional): A pre-sorted index from ``build_hr_index`` for ``hr_data_list``.
 
     Returns:
         int or None: The heart rate value of the nearest data point, or None if no suitable data point is found.
     """
-    closest_element = None
-    # init difference value
-    min_difference = float("inf")
+    timestamps, entries = index if index is not None else build_hr_index(hr_data_list)
+    if not timestamps:
+        return None
+
     if target_time > TIMESTAMP_THRESHOLD_IN_DECISECOND:
         # note that the unit of target_time is decisecond and the unit of start_time is normal millisecond
-        target_time = target_time = target_time - start_time // 100
+        target_time = target_time - start_time // 100
 
-    for item in hr_data_list:
-        timestamp = item.get("timestamp")
-
-        if not timestamp:
+    # The nearest sample in time is always one of the two entries bracketing the
+    # insertion point; ties keep the earliest original order like the linear scan.
+    position = bisect.bisect_left(timestamps, target_time)
+    closest_element = None
+    min_difference = float("inf")
+    closest_position = -1
+    for candidate in (position - 1, position):
+        if not 0 <= candidate < len(entries):
             continue
-
+        timestamp, original_position, item = entries[candidate]
         difference = abs(timestamp - target_time)
-
-        if difference <= threshold and difference < min_difference:
+        if difference > threshold:
+            continue
+        if difference < min_difference or (
+            difference == min_difference and original_position < closest_position
+        ):
             closest_element = item
             min_difference = difference
+            closest_position = original_position
 
     if closest_element:
         hr = closest_element.get("beatsPerMinute")

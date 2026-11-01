@@ -336,6 +336,28 @@ const runCommand = (command) =>
     });
   });
 
+// Every poster is an independent Python process that only reads the validated
+// snapshot, so they can render side by side. Four keeps a runner busy without
+// starving it of memory; each poster takes a few seconds on its own.
+const POSTER_WORKERS = 4;
+
+const runCommandsWithConcurrency = async (commands, concurrency) => {
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, commands.length) },
+    async () => {
+      while (nextIndex < commands.length) {
+        const command = commands[nextIndex];
+        nextIndex += 1;
+        await runCommand(command);
+      }
+    }
+  );
+  // Every worker rejects on the first failure; Promise.all surfaces it while
+  // the rest finish, and the caller still discards the staged candidate.
+  await Promise.all(workers);
+};
+
 const pathExists = async (path) => {
   try {
     await access(path);
@@ -530,9 +552,10 @@ const generate = async (args, profiles) => {
   try {
     await mkdir(join(assetsStaging, plan.namespace), { recursive: true });
     await runCommand(plan.publication.command);
-    for (const poster of plan.posters) {
-      await runCommand(poster.command);
-    }
+    await runCommandsWithConcurrency(
+      plan.posters.map((poster) => poster.command),
+      POSTER_WORKERS
+    );
     await verifyMode(profile, dataStaging, assetsStaging);
     await replaceModeDirectories([
       {

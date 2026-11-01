@@ -17,8 +17,22 @@ on:
       - 'assets/running/**'
       - 'assets/cycling/**'
       - 'assets/hiking/**'
+      # Documentation-only commits cannot change a verified artifact, so they
+      # skip the heavy matrix on master. pull_request is deliberately left
+      # unfiltered: a skipped required check would block the PR forever.
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.editorconfig'
   pull_request:
   workflow_dispatch:
+
+# A newer push to the same pull request cancels the previous run. Release
+# lanes (workflow_call) and every master commit keep running to completion.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   python_lint_and_test:
@@ -31,7 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -39,12 +53,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-          cache-dependency-path: 'requirements-dev.txt'
+
+      - name: Set up uv with its built-in cache
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements-dev.txt
 
       - name: Install dependencies
         run: |
-          pip install -r requirements-dev.txt
+          uv pip install --system -r requirements-dev.txt
 
       - name: Run GPX sync test
         run: |
@@ -69,7 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Setup pnpm
@@ -107,7 +125,7 @@ jobs:
 
   release:
     if: inputs.mode == 'release'
-    name: Verify and build release SHA
+    name: Verify release SHA (Python)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -115,7 +133,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_sha }}
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Prove the source is still current master
@@ -134,11 +152,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+
+      - name: Set up uv with its built-in cache
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements-dev.txt
 
       - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
+        run: uv pip install --system -r requirements-dev.txt
 
       - name: Run canonical Python checks
         run: |
@@ -148,6 +170,33 @@ jobs:
           black . --diff --color
           black . --check
           ruff check .
+
+  # The Python and frontend halves of the release lane never share a worktree,
+  # so they run side by side instead of paying one wait for the other.
+  release_frontend:
+    if: inputs.mode == 'release'
+    name: Verify and build release SHA (Node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the exact published SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove the source is still current master
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          remote_master_sha="$(git ls-remote origin refs/heads/master | awk '{print $1}')"
+          test "$checked_out_sha" = "${{ inputs.source_sha }}"
+          if [ "$remote_master_sha" != "${{ inputs.source_sha }}" ]; then
+            echo "::error::master advanced to $remote_master_sha; refusing stale SHA ${{ inputs.source_sha }}."
+            exit 1
+          fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

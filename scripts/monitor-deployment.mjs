@@ -535,6 +535,9 @@ const runBrowserProbe = async ({
   ]) {
     delete childEnvironment[secretName];
   }
+  // A runner has no session bus; without this Chrome retries the connection and
+  // can stall startup until the probe deadline expires.
+  childEnvironment.DBUS_SESSION_BUS_ADDRESS = '/dev/null';
   const child = spawn(
     browserBin,
     [
